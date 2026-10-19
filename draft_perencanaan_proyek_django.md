@@ -1,16 +1,16 @@
 # Draft Perencanaan Proyek: Pertamina Procurement AI Copilot & Live Canvas
-**Arsitektur Modern Decoupled: Frontend agenticv3 + Backend FastAPI (ASGI) + SQLAlchemy 2.0 + Celery + Nginx Reverse Proxy + CI/CD Docker**
+**Arsitektur Modern Decoupled: Frontend React (Vite JavaScript) + Backend FastAPI (ASGI) + SQLAlchemy 2.0 + Celery + Nginx Reverse Proxy + CI/CD Docker**
 
 ---
 
 ## 1. Ringkasan Eksekutif & Tujuan Proyek
 
-Proyek ini bertujuan mengintegrasikan antarmuka frontend modern **`agenticv3`** (berbasis *Claude-style Live Canvas*, *Progress Drawer*, dan *Vertical Docked Tab*) dengan backend **FastAPI (Python 3.11/3.12)** yang berkinerja tinggi (*high-concurrency async*). 
+Proyek ini bertujuan mengintegrasikan antarmuka frontend modern berbasis **React + Vite (JavaScript)** dengan arsitektur komponen modular di dalam folder **`komponen/`**, terhubung ke backend **FastAPI (Python 3.11/3.12)** yang berkinerja tinggi (*high-concurrency async*).
 
 Sistem ini mengadopsi **Opsi A (Nginx Reverse Proxy Decoupled)**, di mana:
-1. **Nginx** menyajikan berkas antarmuka frontend `agenticv3` (HTML5, Vanilla CSS, Vanilla JS) secara langsung ke pengguna dengan latensi ultra-rendah (< 2 ms) melalui *caching* dan Linux `sendfile`.
-2. **FastAPI** beroperasi secara terdedikasi sebagai backend ASGI di port internal 8000 untuk menangani komputasi AI, validasi Pydantic v2, *token streaming* (Server-Sent Events), koneksi Qdrant Vector DB, serta pembentukan dokumen resmi PT Pertamina Patra Niaga (IKPP Versi 2.0 40 Poin, RKS, Kontrak Definitif, dan Amendemen) yang patuh terhadap Pedoman No. A03-001/PNG200000/2024-S9.
-3. **SQLAlchemy 2.0 (Async) + Alembic** menangani persistensi data relasional ke PostgreSQL untuk 8 tabel pengadaan, riwayat chat, dan audit kepatuhan.
+1. **Frontend React (Vite JavaScript)**: Seluruh elemen antarmuka (*Claude-style Live Canvas*, *Progress Drawer*, *Vertical Docked Tab*, *Chat & In-Chat Artifact Cards*, *Tool-calls Accordion*, dan *DocPicker Modal*) dipecah menjadi komponen-komponen independen dan dapat digunakan kembali (*reusable components*) di dalam direktori `frontend/src/komponen/`. Pada mode produksi, Vite mengompilasi bundel statis ke folder `dist/` yang disajikan langsung oleh Nginx dengan latensi < 2 ms.
+2. **Backend FastAPI**: Beroperasi sebagai layanan ASGI mandiri di port internal 8000 untuk menangani komputasi AI, validasi Pydantic v2, *token streaming* (Server-Sent Events), koneksi Qdrant Vector DB, serta pembentukan dokumen resmi PT Pertamina Patra Niaga (IKPP Versi 2.0 40 Poin, RKS, Kontrak Definitif, dan Amendemen) yang patuh terhadap Pedoman No. A03-001/PNG200000/2024-S9.
+3. **SQLAlchemy 2.0 (Async) + Alembic**: Menangani persistensi data relasional ke PostgreSQL untuk 8 tabel pengadaan, riwayat chat, dan audit kepatuhan.
 
 ---
 
@@ -18,10 +18,10 @@ Sistem ini mengadopsi **Opsi A (Nginx Reverse Proxy Decoupled)**, di mana:
 
 ```mermaid
 graph TD
-    Client["Browser Pengguna (agenticv3 UI)"] -->|Port 80/443| Nginx["Nginx Edge Gateway & Reverse Proxy"]
+    Client["Browser Pengguna (React Vite UI)"] -->|Port 80/443| Nginx["Nginx Edge Gateway & Reverse Proxy"]
     
     subgraph "Ingress & Presentation Layer"
-        Nginx -->|GET / & Static Assets| FrontendDisk["Frontend Web Root (agenticv3 HTML/CSS/JS)"]
+        Nginx -->|GET / & Static Assets| ViteDist["Vite Production Build (frontend/dist/)"]
         Nginx -->|POST/GET /api/... Buffering & Timeout 300s| FastAPI["FastAPI ASGI Server (Uvicorn)"]
     end
 
@@ -56,28 +56,63 @@ pertamina_procurement/
 │
 ├── .github/                               # [CI/CD] Otomasi Pipeline
 │   └── workflows/
-│       ├── ci.yml                         # Uji otomatis (flake8, pytest, docker build test)
+│       ├── ci.yml                         # Uji otomatis (React build, Pytest FastAPI, Docker test)
 │       └── deploy.yml                     # Deploy otomatis via SSH ke server produksi
 │
 ├── deploy/                                # Konfigurasi Server
 │   └── nginx/
-│       └── default.conf                   # Reverse proxy, buffer upload 100MB, timeout 300s
+│       └── default.conf                   # Reverse proxy, static server dist/, timeout 300s
 │
-├── frontend/                              # [DARI AGENTICV3] Static Single Page Interface
-│   ├── index.html                         # Antarmuka utama (Live Canvas, Chat, Drawer)
-│   ├── css/
-│   │   ├── main.css                       # Layout, topbar, restore tab vertikal
-│   │   ├── canvas.css                     # Review dokumen editor & tabs
-│   │   └── chat.css                       # Chat bubble, cards, drawer
-│   ├── js/
-│   │   ├── state.js                       # Store reactive state
-│   │   ├── api.js                         # Fetch client ke endpoint FastAPI /api/...
-│   │   ├── chat.js                        # Controller chat & drawer
-│   │   ├── canvas.js                      # Controller editor review dokumen
-│   │   └── app.js                         # Bootstrap aplikasi
-│   └── images/                            # Logo Pertamina & icons
+├── frontend/                              # [FRONTEND REACT + VITE JAVASCRIPT]
+│   ├── index.html                         # Entry point HTML Vite
+│   ├── package.json                       # Dependensi React, Vite, Lucide-React, Axios
+│   ├── vite.config.js                     # Konfigurasi build & proxy dev /api/ -> :8000
+│   ├── public/                            # Aset publik statis (favicon, logo Pertamina)
+│   └── src/
+│       ├── main.jsx                       # React DOM entry point
+│       ├── App.jsx                        # Root Layout (Split-screen Chat & Live Canvas)
+│       ├── App.css
+│       ├── index.css                      # Global styles & design tokens resmi Pertamina
+│       │
+│       ├── komponen/                      # [FOLDER KOMPONEN MODULAR]
+│       │   ├── Navbar/
+│       │   │   ├── Navbar.jsx             # Topbar, Logo Pertamina, Ganti Dokumen, Step & Unduh
+│       │   │   ├── HamburgerMenu.jsx      # Dropdown menu pengaturan & riwayat pengadaan
+│       │   │   └── Navbar.css
+│       │   │
+│       │   ├── Chat/
+│       │   │   ├── ChatPanel.jsx          # Panel chat kiri (auto 100% saat canvas off)
+│       │   │   ├── ChatBubble.jsx         # Pesan percakapan user & balasan AI
+│       │   │   ├── ToolCallCard.jsx       # Card interaktif eksekusi tool AI (klausul STK)
+│       │   │   ├── ArtifactCard.jsx       # Card embed preview dokumen di dalam chat
+│       │   │   ├── QuickActionChips.jsx   # Tombol saran prompt cepat (Jaminan, CSMS, HPS)
+│       │   │   ├── ChatInput.jsx          # Textarea input & tombol kirim (send button)
+│       │   │   └── Chat.css
+│       │   │
+│       │   ├── Canvas/
+│       │   │   ├── CanvasReview.jsx       # Panel review dokumen kanan (Live Canvas)
+│       │   │   ├── CanvasToolbar.jsx      # Tabs (Dokumen, Matriks CSMS, STK 86) & Icon Tools
+│       │   │   ├── DocumentEditor.jsx     # Editor interaktif klausul / markdown dokumen
+│       │   │   ├── CsmsMatrixView.jsx     # Tampilan visual matriks evaluasi risiko CSMS
+│       │   │   ├── StkComplianceView.jsx  # Checklist kepatuhan 86 aturan STK Pertamina
+│       │   │   └── Canvas.css
+│       │   │
+│       │   ├── Common/
+│       │   │   ├── VerticalRestoreTab.jsx # Tab vertikal samping kanan pembuka kembali canvas
+│       │   │   ├── ProgressDrawer.jsx     # Drawer slide-out 'Step 1 of 4' & resource acuan
+│       │   │   ├── DocPickerModal.jsx     # Modal popup pemilihan 4 paket dokumen tender
+│       │   │   ├── Toast.jsx              # Notifikasi pop-up feedback status / error
+│       │   │   └── Common.css
+│       │   │
+│       │   └── index.js                   # Barrel export seluruh komponen
+│       │
+│       ├── services/                      # Komunikasi API & State
+│       │   ├── api.js                     # Axios/Fetch client ke endpoint FastAPI
+│       │   └── useAppStore.js             # State management global (Zustand / Context)
+│       │
+│       └── assets/                        # Logo SVG, icon, dan styling tambahan
 │
-├── backend/                               # [FASTAPI ASGI BACKEND]
+├── backend/                               # [BACKEND FASTAPI ASGI]
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── main.py                        # Entrypoint FastAPI (CORS, routers, lifecycle)
@@ -120,14 +155,14 @@ pertamina_procurement/
 │       ├── test_api_tender.py
 │       └── test_generator.py
 │
-├── media/                                 # Penyimpanan Berkas Bersama (Docker Volume)
-│   ├── uploads/                           # Berkas BoQ / RKS acuan yang diunggah
-│   └── generated_docs/                    # Berkas .docx hasil generate siap unduh
+├── media/                                 # Shared Storage (Uploads & Generated .DOCX)
+│   ├── uploads/
+│   └── generated_docs/
 │
-├── output/                                # Folder scratch/temp untuk pemrosesan file
-├── .env                                   # API Keys, Qdrant URL, DB Credentials
-├── .env.example                           # Template variabel lingkungan bebas rahasia
-├── Dockerfile                             # Multi-stage Docker build untuk FastAPI & Celery
+├── output/                                # Temporary scratch / processing files
+├── .env                                   # API Keys & DB Credentials
+├── .env.example
+├── Dockerfile                             # Multi-stage Docker build untuk Frontend, FastAPI & Celery
 └── docker-compose.yml                     # Orkestrasi 6 kontainer terpadu
 ```
 
@@ -448,11 +483,14 @@ erDiagram
 
 ## 5. Tahapan Implementasi (Rencana Kerja 5 Fase)
 
-### Fase 1: Penataan Struktur Decoupled & Setup FastAPI
-- [ ] Buat struktur folder decoupled: `frontend/` (memuat `agenticv3`) dan `backend/` (FastAPI application).
+### Fase 1: Inisialisasi Frontend React (Vite JavaScript) & Setup Backend FastAPI
+- [ ] Inisialisasi proyek React menggunakan Vite (JavaScript) di dalam folder `frontend/`.
+- [ ] Buat struktur folder komponen modular di `frontend/src/komponen/` (`Navbar/`, `Chat/`, `Canvas/`, `Common/`).
+- [ ] Migrasikan CSS design system Pertamina (`main.css`, `canvas.css`, `chat.css`) ke dalam styling komponen React.
+- [ ] Konfigurasi `frontend/vite.config.js` untuk development proxy `/api` -> `http://127.0.0.1:8000`.
 - [ ] Siapkan file `requirements.txt` untuk FastAPI (`fastapi`, `uvicorn[standard]`, `pydantic-settings`, `sqlalchemy[asyncio]`, `asyncpg`, `python-docx`, `qdrant-client`).
 - [ ] Buat `backend/app/main.py` dengan CORS middleware aktif dan OpenAPI Swagger di `/docs`.
-- [ ] Buat file konfigurasi `deploy/nginx/default.conf` untuk menghubungkan frontend statis dan proxy `/api/`.
+- [ ] Buat konfigurasi `deploy/nginx/default.conf` untuk menyajikan `frontend/dist` dan memproksi `/api/`.
 
 ### Fase 2: Implementasi Database SQLAlchemy 2.0 & Alembic
 - [ ] Definisikan 8 model tabel deklaratif di `backend/app/models/`.
@@ -460,7 +498,7 @@ erDiagram
 - [ ] Inisialisasi Alembic (`alembic init -t async alembic`) dan buat migrasi awal (`alembic revision --autogenerate -m "initial_procurement_tables"`).
 - [ ] Jalankan migrasi ke PostgreSQL lokal / Docker (`alembic upgrade head`).
 
-### Fase 3: Integrasi Modul AI RAG ke Endpoint FastAPI
+### Fase 3: Integrasi Modul AI RAG ke Endpoint FastAPI & UI React
 - [ ] Pindahkan logic dari `Agentic_Rag_Pertamina_camp` (`RAG/`, `tender/`, `contract/`) ke `backend/app/services/`.
 - [ ] Implementasikan router endpoint asinkron di `backend/app/api/`:
   - `POST /api/extract-tender-metadata` (Ekstraksi BoQ Excel & RKS PDF acuan).
@@ -469,18 +507,18 @@ erDiagram
   - `POST /api/generate-kontrak` (Export Kontrak .docx).
   - `POST /api/generate-amendemen` (Export Amendemen .docx).
   - `POST /api/kb/ingest` & `GET /api/kb/list` (Koneksi Qdrant Vector Store).
-- [ ] Verifikasi format unduhan `.docx` dengan template styling resmi Pertamina (`doc_config.json`).
+- [ ] Hubungkan komponen React `CanvasReview` dan `ChatPanel` dengan endpoint FastAPI via `frontend/src/services/api.js`.
 
 ### Fase 4: Konfigurasi Celery Worker & Streaming Token AI (SSE)
 - [ ] Hubungkan Celery dengan Redis broker untuk pemrosesan file `.docx` masif di latar belakang.
-- [ ] Implementasikan endpoint `GET /api/chat/stream` menggunakan `EventSourceResponse` (Server-Sent Events) untuk streaming token jawaban AI per kata.
-- [ ] Sinkronkan status task worker dengan indikator progres frontend (*Progress Drawer* & *Live Sync Badge*).
+- [ ] Implementasikan endpoint `GET /api/chat/stream` menggunakan Server-Sent Events (SSE) untuk streaming token balasan AI per kata.
+- [ ] Sinkronkan status task worker dengan komponen React `ProgressDrawer` dan `VerticalRestoreTab`.
 
 ### Fase 5: Dockerization, Nginx Gateway, & Pipeline CI/CD
-- [ ] Susun `Dockerfile` multi-stage untuk FastAPI & Celery.
+- [ ] Susun `Dockerfile` multi-stage: Stage 1 (Node Vite build `frontend/dist`) dan Stage 2 (Python FastAPI + Uvicorn).
 - [ ] Buat `docker-compose.yml` yang menghubungkan service: `nginx`, `web`, `celery_worker`, `redis`, `qdrant`, dan `db`.
-- [ ] Siapkan workflow `.github/workflows/deploy.yml` dengan automated tests (Pytest).
-- [ ] Uji coba skenario *end-to-end* (Upload BoQ -> Ekstraksi AI -> Edit Canvas -> Generate Dokumen -> Unduh .docx).
+- [ ] Siapkan workflow `.github/workflows/deploy.yml` dengan automated tests (Build React + Pytest FastAPI).
+- [ ] Uji coba skenario *end-to-end* (Upload BoQ -> Ekstraksi AI -> Edit Canvas di React -> Generate Dokumen -> Unduh .docx).
 
 ---
 
@@ -490,7 +528,7 @@ erDiagram
 | :--- | :--- | :--- |
 | **Ekstraksi BoQ Excel memakan waktu lama** | Browser mengalami timeout | Celery worker menangani parsing di background dan mengirimkan sinyal progres ke frontend. |
 | **Koneksi LLM terputus di tengah jalan** | Dokumen gagal terbentuk utuh | Logika *retry mechanism* (maksimal 3 kali) pada `services` sebelum melaporkan error ke chat window. |
-| **CORS Blocking pada Pengujian Lokal** | Request frontend ditolak browser | FastAPI mengaktifkan `CORSMiddleware` dengan whitelist origin yang fleksibel saat `DEBUG=True`. |
+| **CORS Blocking pada Pengujian Lokal** | Request frontend ditolak browser | Vite dev server menggunakan konfigurasi reverse proxy internal `/api` -> `http://127.0.0.1:8000`. |
 | **Migrasi Skema Database di Produksi** | Kegagalan update tabel | Menggunakan Alembic versioning dengan verifikasi *dry-run* (`alembic upgrade --sql`) sebelum eksekusi riil. |
 
 ---
@@ -510,7 +548,7 @@ sequenceDiagram
 
     Dev->>Git: 1. Push Fitur Baru (git push origin main)
     Git->>CI: 2. Trigger Workflow Otomatis
-    Note over CI: Run Tests & Linter<br/>- Pytest API FastAPI<br/>- Tes Ekspor .DOCX<br/>- Build Docker Image Test
+    Note over CI: Run Tests & Build<br/>- npm run build (React Vite)<br/>- Pytest API FastAPI<br/>- Build Docker Image Test
     CI->>Reg: 3. Jika Tes Lolos: Push Image Baru (:latest)
     CI->>Server: 4. Kirim Sinyal Update (via SSH / Webhook)
     Note over Server: Server Mengeksekusi:<br/>- docker compose pull<br/>- alembic upgrade head<br/>- docker compose up -d (Rolling Update)
@@ -520,13 +558,14 @@ sequenceDiagram
 ### 7.2 Siklus Penambahan Fitur Baru (Developer Workflow)
 1. **Lokal (Branching & Development)**:
    - Developer membuat branch fitur baru: `git checkout -b feature/nama-fitur`.
+   - Menambahkan komponen baru di `frontend/src/komponen/nama-fitur/`.
    - Mengubah model di `backend/app/models/`, menjalankan `alembic revision --autogenerate -m "add_new_feature"`.
-   - Menulis/memperbarui komponen UI di `frontend/`.
-   - Menjalankan unit test lokal: `pytest backend/tests/`.
+   - Menjalankan unit test lokal: `npm run build` di frontend dan `pytest backend/tests/` di backend.
 2. **Pull Request & Continuous Integration (CI)**:
    - Developer mem-push branch ke GitHub dan membuka Pull Request (PR) ke `main`.
    - GitHub Actions otomatis menjalankan:
-     - **Linting & Code Style**: Flake8 / Ruff.
+     - **Vite Build Validation**: `npm run build` memastikan JSX dan dependensi React valid tanpa syntax error.
+     - **Linting & Code Style**: Flake8 / Ruff di backend.
      - **Pytest**: Memverifikasi validasi Pydantic, route FastAPI, dan generator `.docx`.
      - **Docker Build Check**: Memastikan image Docker berhasil di-build tanpa missing dependency.
    - PR hanya dapat di-merge jika seluruh pengujian berstatus **HIJAU (PASS)**.
@@ -548,15 +587,35 @@ sequenceDiagram
 
 ### 7.4 Spesifikasi Konfigurasi GitHub Actions (`.github/workflows/deploy.yml`)
 ```yaml
-name: CI/CD Pertamina Copilot (FastAPI)
+name: CI/CD Pertamina Copilot (React Vite + FastAPI)
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  test:
-    name: Run Automated Tests
+  test-frontend:
+    name: Build & Validate React Vite Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci
+      - name: Run Vite Build Check
+        run: |
+          cd frontend
+          npm run build
+
+  test-backend:
+    name: Run Pytest Backend Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -574,7 +633,7 @@ jobs:
 
   deploy:
     name: Deploy to Server
-    needs: test
+    needs: [test-frontend, test-backend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
@@ -600,7 +659,7 @@ jobs:
 
 | Layanan (Service) | Base Image | Port Eksternal | Port Internal | Peran & Tanggung Jawab |
 | :--- | :--- | :--- | :--- | :--- |
-| **`nginx`** | `nginx:1.25-alpine` | `80`, `443` | `80`, `443` | Reverse proxy, static server `frontend/`, buffer upload 100MB, timeout AI 300s. |
+| **`nginx`** | `nginx:1.25-alpine` | `80`, `443` | `80`, `443` | Reverse proxy, menyajikan `frontend/dist`, buffer upload 100MB, timeout AI 300s. |
 | **`web`** | Custom Python 3.11 | - | `8000` | FastAPI ASGI application (`uvicorn`), melayani OpenAPI Swagger & REST API. |
 | **`celery_worker`**| Custom Python 3.11 | - | - | Background worker untuk generasi dokumen Word (`.docx`) & ekstraksi BoQ berat. |
 | **`redis`** | `redis:7-alpine` | - | `6379` | Message broker untuk antrean tugas Celery & caching session. |
@@ -609,11 +668,19 @@ jobs:
 
 ---
 
-### 8.2 Spesifikasi `Dockerfile` (Multi-Stage Production Build)
+### 8.2 Spesifikasi `Dockerfile` (Multi-Stage Build: React Vite + FastAPI)
 
 ```dockerfile
-# Stage 1: Build & Compile Dependencies
-FROM python:3.11-slim as builder
+# Stage 1: Build Frontend React dengan Vite
+FROM node:20-alpine as frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Build Python Dependencies
+FROM python:3.11-slim as backend-builder
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -627,7 +694,7 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
-# Stage 2: Final Minimal Runtime Image
+# Stage 3: Final Production Runtime Image
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -639,10 +706,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Akun pengguna non-root demi standar keamanan BUMN
 RUN groupadd -r pertamina && useradd -r -g pertamina pertamina
 
-COPY --from=builder /app/wheels /wheels
+COPY --from=backend-builder /app/wheels /wheels
 RUN pip install --no-cache /wheels/* && rm -rf /wheels
 
 COPY backend/ .
+COPY --from=frontend-builder /app/frontend/dist /app/static_dist
+
 RUN chown -R pertamina:pertamina /app
 
 USER pertamina
@@ -750,7 +819,7 @@ services:
       - "443:443"
     volumes:
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
       - media_volume:/usr/share/nginx/html/media:ro
     depends_on:
       - web
@@ -783,16 +852,16 @@ server {
     server_name localhost;
     client_max_body_size 100M;
 
-    # 1. Sajikan Frontend Statis agenticv3 secara langsung
+    # 1. Sajikan Hasil Build React Vite (dist/)
     location / {
         root /usr/share/nginx/html;
         index index.html;
         try_files $uri $uri/ /index.html;
         
-        # Cache aset statis
+        # Cache aset statis hasil hashing Vite
         location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
-            expires 7d;
-            add_header Cache-Control "public, no-transform";
+            expires 30d;
+            add_header Cache-Control "public, max-age=2592000, immutable";
         }
     }
 
@@ -856,6 +925,8 @@ docker compose logs -f web celery_worker
      output/
      __pycache__/
      .pytest_cache/
+     node_modules/
+     dist/
      ```
 2. **Penyediaan Berkas Acuan `.env.example`**:
    * Pengembang baru menyalin dari `.env.example`:
