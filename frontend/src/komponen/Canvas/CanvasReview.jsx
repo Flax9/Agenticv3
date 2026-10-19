@@ -5,6 +5,7 @@ import CanvasToolbar from './CanvasToolbar'
 import DocumentEditor from './DocumentEditor'
 import KnowledgeBaseView from './KnowledgeBaseView'
 import MatrixView from './MatrixView'
+import RksDraftView from './RksDraftView'
 import StkComplianceView from './StkComplianceView'
 
 function EmptyCanvas({ mode }) {
@@ -13,7 +14,7 @@ function EmptyCanvas({ mode }) {
       <div className="mb-3 text-4xl opacity-70">{MODE_META[mode].icon}</div>
       <div className="mb-1 text-sm font-bold text-pertamina-navy">Draf belum tersedia</div>
       <p className="max-w-sm text-xs text-pertamina-gray-500">
-        Unggah berkas acuan atau muat data contoh dari panel chat. Setelah parameter diterapkan, naskah{' '}
+        Mulai percakapan atau pilih berkas acuan dari drive di panel chat. Setelah draf tersusun, naskah{' '}
         {MODE_META[mode].title} akan tampil di sini.
       </p>
     </div>
@@ -24,6 +25,7 @@ export default function CanvasReview({ className = '' }) {
   const mode = useAppStore((s) => s.mode)
   const activeTab = useAppStore((s) => s.activeTab)
   const data = useAppStore((s) => s.packages[s.mode])
+  const agentDraft = useAppStore((s) => (s.mode === 'rks' ? s.draft : null))
   const pushToast = useAppStore((s) => s.pushToast)
   const bodyRef = useRef(null)
 
@@ -42,6 +44,7 @@ export default function CanvasReview({ className = '' }) {
   let content
   if (mode === 'kb') content = <KnowledgeBaseView />
   else if (activeTab === 'checklistTab') content = <StkComplianceView />
+  else if (agentDraft && activeTab === 'previewTab') content = <RksDraftView draft={agentDraft} />
   else if (!data) content = <EmptyCanvas mode={mode} />
   else if (activeTab === 'matrixTab') content = <MatrixView mode={mode} data={data} />
   else content = <DocumentEditor mode={mode} data={data} />

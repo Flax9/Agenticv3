@@ -3,6 +3,7 @@ import {
   CanvasReview,
   ChatPanel,
   ConfirmDialog,
+  DatasetPickerModal,
   DocPickerModal,
   Navbar,
   ProgressDrawer,
@@ -58,6 +59,7 @@ export default function App() {
       <VerticalRestoreTab />
       <ProgressDrawer />
       <DocPickerModal />
+      <DatasetPickerModal />
       <ConfirmDialog />
       <ToastStack />
     </div>

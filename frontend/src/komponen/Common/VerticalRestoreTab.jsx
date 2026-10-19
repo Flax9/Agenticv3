@@ -4,6 +4,7 @@ import { useAppStore } from '../../services/useAppStore'
 export default function VerticalRestoreTab() {
   const isCanvasVisible = useAppStore((s) => s.isCanvasVisible)
   const toggleCanvasVisible = useAppStore((s) => s.toggleCanvasVisible)
+  const activity = useAppStore((s) => s.activity)
 
   if (isCanvasVisible) return null
 
@@ -19,7 +20,12 @@ export default function VerticalRestoreTab() {
       <span className="rotate-180 whitespace-nowrap text-[11px] font-bold tracking-wide text-pertamina-gray-50 [writing-mode:vertical-rl]">
         Review Dokumen
       </span>
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981]" title="Live Sync Aktif" />
+      {/* Kuning berkedip selama agent/sinkronisasi berjalan, agar user tahu draf bisa berubah */}
+      {activity ? (
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400 shadow-[0_0_6px_#FBBF24]" title={activity.label} />
+      ) : (
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981]" title="Live Sync Aktif" />
+      )}
     </button>
   )
 }

@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -9,12 +10,15 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
 from app.api.uploads import PDF, PDF_OR_EXCEL, read_upload
+from app.config import settings
 from app.core.audit import record_audit
 from app.core.deps import DraftingUser, GeneratingUser, SessionDep, client_ip
-from app.models import AppUser
+from app.models import AppUser, TenderProject
 from app.models.enums import ModulTerkait, TipeAksi
 from app.services.contract.amendment_generator import export_amendemen_to_docx, generate_amendemen_document
 from app.services.contract.generator import export_kontrak_to_docx, generate_kontrak_document
+from app.services.dataset.sync import DatasetUnavailableError, dataset_root, load_reference
+from app.services.drafts import add_draft_version
 from app.services.rag.summarizer import extract_tender_metadata_from_docs, extract_text_from_pdfs, summarize_context
 from app.services.rag.tools import export_rks_to_docx, generate_rks_document
 from app.services.tender.generator import export_tender_to_docx, generate_tender_document
@@ -33,7 +37,7 @@ def _safe_name(text: str, limit: int = 40) -> str:
     return "".join(c if c.isalnum() or c in " -_" else "_" for c in text)[:limit].strip().replace(" ", "_")
 
 
-def _docx_response(export_result: str) -> FileResponse:
+def _docx_path(export_result: str) -> Path:
     """Ambil path berkas dari keluaran tool export (baris '📄 File: ...')."""
     file_path = next(
         (line.split("📄 File:", 1)[1].strip() for line in export_result.splitlines() if "📄 File:" in line),
@@ -41,7 +45,40 @@ def _docx_response(export_result: str) -> FileResponse:
     )
     if not file_path or not Path(file_path).exists():
         raise HTTPException(status_code=500, detail="Dokumen dibuat tetapi berkas .docx tidak ditemukan.")
-    return FileResponse(path=file_path, filename=Path(file_path).name, media_type=DOCX_MEDIA_TYPE)
+    return Path(file_path)
+
+
+async def _owned_project(session: SessionDep, project_id: str, user: AppUser) -> TenderProject | None:
+    """Paket milik user yang dirujuk form (kosong = tidak disimpan ke paket mana pun)."""
+    if not project_id:
+        return None
+    try:
+        pid = uuid.UUID(project_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="project_id tidak valid.") from e
+    project = await session.get(TenderProject, pid)
+    if project is None or project.deleted_at is not None or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Paket tidak ditemukan.")
+    return project
+
+
+async def _dataset_bytes(session: SessionDep, file_id: str, allowed_ext: set[str], label: str):
+    """Isi berkas acuan dari folder dataset (pengganti unggah berkas)."""
+    if not file_id:
+        return None
+    try:
+        root = dataset_root(settings.dataset_dir)
+        row, path = await load_reference(session, root, uuid.UUID(file_id))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"ID berkas {label} tidak valid.") from e
+    except DatasetUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    if path.suffix.lower() not in allowed_ext:
+        allowed = ", ".join(sorted(allowed_ext))
+        raise HTTPException(status_code=415, detail=f"Berkas {label} harus berformat {allowed}.")
+    return await run_in_threadpool(path.read_bytes), row.nama_file
 
 
 async def _context_from_pdf(file: UploadFile | None) -> str:
@@ -59,21 +96,37 @@ class _Actor:
     def __init__(self, user: AppUser, session: SessionDep, request: Request):
         self.user, self.session, self.ip = user, session, client_ip(request)
 
-    async def audit(self, tipe_aksi: TipeAksi, modul: ModulTerkait, rincian: str, snapshot: dict | None = None):
+    async def audit(
+        self,
+        tipe_aksi: TipeAksi,
+        modul: ModulTerkait,
+        rincian: str,
+        snapshot: dict | None = None,
+        project_id: uuid.UUID | None = None,
+    ):
         await record_audit(
             self.session,
             tipe_aksi=tipe_aksi,
             modul=modul,
             rincian=rincian,
             user_id=self.user.id,
+            project_id=project_id,
             snapshot=snapshot,
             ip_address=self.ip,
         )
 
 
 async def _generate_and_export(
-    actor: _Actor, kind: str, title: str, generator, gen_args: dict, exporter, filename: str
+    actor: _Actor,
+    kind: str,
+    title: str,
+    generator,
+    gen_args: dict,
+    exporter,
+    filename: str,
+    project_id: str = "",
 ) -> FileResponse:
+    project = await _owned_project(actor.session, project_id, actor.user)
     async with _LOCKS[kind]:
         gen_result = await run_in_threadpool(generator.invoke, gen_args)
         if "Error" in gen_result or "Tidak ditemukan" in gen_result:
@@ -81,13 +134,24 @@ async def _generate_and_export(
         export_result = await run_in_threadpool(exporter.invoke, {"output_filename": filename})
         if "Error" in export_result or "Tidak ada draft" in export_result:
             raise HTTPException(status_code=400, detail=export_result)
-    response = _docx_response(export_result)
+        path = _docx_path(export_result)
+        draft = None
+        if project is not None:
+            # Disalin di dalam lock: request berikutnya bisa menimpa berkas dengan nama yang sama
+            project.nama_pengadaan = title[:255] or project.nama_pengadaan
+            draft = await add_draft_version(actor.session, project, Path(filename).stem, gen_args, path)
+            path = Path(draft.file_docx_path)
     await actor.audit(
         TipeAksi.GENERATE_DOCX,
         ModulTerkait.EXPORTER,
         f"Generate dokumen {kind}: {title}",
-        {"berkas": response.filename},
+        {"berkas": filename, "draft_id": str(draft.id) if draft else None},
+        project_id=project.id if project else None,
     )
+    response = FileResponse(path=path, filename=filename, media_type=DOCX_MEDIA_TYPE)
+    if draft is not None:
+        response.headers["X-Draft-Id"] = str(draft.id)
+        response.headers["X-Draft-Versi"] = draft.versi
     return response
 
 
@@ -97,15 +161,21 @@ async def extract_tender_metadata(
     resiko_csms: str = Form("Tinggi"),
     file_rks: UploadFile | None = File(None, description="Dokumen RKS (PDF)"),
     file_boq: UploadFile | None = File(None, description="Dokumen BoQ (PDF atau Excel)"),
+    rks_file_id: str = Form("", description="ID berkas RKS dari folder dataset (pengganti file_rks)"),
+    boq_file_id: str = Form("", description="ID berkas BoQ dari folder dataset (pengganti file_boq)"),
+    project_id: str = Form("", description="Paket tempat hasil ekstraksi disimpan (opsional)"),
     *,
     user: DraftingUser,
     session: SessionDep,
     request: Request,
 ):
-    rks = await read_upload(file_rks, PDF, "RKS")
-    boq = await read_upload(file_boq, PDF_OR_EXCEL, "BoQ")
+    project = await _owned_project(session, project_id, user)
+    rks = await read_upload(file_rks, PDF, "RKS") or await _dataset_bytes(session, rks_file_id, PDF, "RKS")
+    boq = await read_upload(file_boq, PDF_OR_EXCEL, "BoQ") or await _dataset_bytes(
+        session, boq_file_id, PDF_OR_EXCEL, "BoQ"
+    )
     if rks is None and boq is None:
-        raise HTTPException(status_code=400, detail="Unggah minimal satu berkas RKS atau BoQ.")
+        raise HTTPException(status_code=400, detail="Pilih minimal satu berkas RKS atau BoQ.")
     try:
         data = await run_in_threadpool(
             extract_tender_metadata_from_docs,
@@ -121,8 +191,15 @@ async def extract_tender_metadata(
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     names = ", ".join(u[1] for u in (rks, boq) if u)
+    if project is not None:
+        project.metadata_ekstraksi = {"sumber": names, "hasil": data}
+        if isinstance(data, dict) and data.get("nama_pengadaan"):
+            project.nama_pengadaan = str(data["nama_pengadaan"])[:255]
     await _Actor(user, session, request).audit(
-        TipeAksi.EKSTRAKSI, ModulTerkait.CHAT, f"Ekstraksi metadata dari {names}"
+        TipeAksi.EKSTRAKSI,
+        ModulTerkait.CHAT,
+        f"Ekstraksi metadata dari {names}",
+        project_id=project.id if project else None,
     )
     return {"status": "success", "data": data}
 
@@ -151,6 +228,7 @@ async def generate_tender(
     pemasukan_selesai: str = Form("Senin, 15 Desember 2025"),
     context_summary: str = Form(""),
     file: UploadFile | None = File(None, description="PDF RKS/BoQ untuk konteks (opsional)"),
+    project_id: str = Form("", description="Paket tempat draf disimpan (opsional)"),
     *,
     user: GeneratingUser,
     session: SessionDep,
@@ -187,6 +265,7 @@ async def generate_tender(
         gen_args,
         export_tender_to_docx,
         f"Dokumen_Tender_{_safe_name(nama_pengadaan)}.docx",
+        project_id,
     )
 
 
@@ -199,6 +278,7 @@ async def generate_rks(
     nomor_dokumen: str = Form("RKS-[KODE]-[TAHUN]"),
     nama_perusahaan: str = Form("PT PERTAMINA"),
     file: UploadFile | None = File(None, description="PDF BoQ/konteks (opsional)"),
+    project_id: str = Form("", description="Paket tempat draf disimpan (opsional)"),
     *,
     user: GeneratingUser,
     session: SessionDep,
@@ -221,6 +301,7 @@ async def generate_rks(
         gen_args,
         export_rks_to_docx,
         f"RKS_{_safe_name(jenis_pekerjaan)}.docx",
+        project_id,
     )
 
 
@@ -240,6 +321,7 @@ async def generate_kontrak(
     resiko_csms: str = Form(""),
     pejabat_ttd_pertamina: str = Form(""),
     file: UploadFile | None = File(None, description="PDF RKS/BoQ untuk konteks (opsional)"),
+    project_id: str = Form("", description="Paket tempat draf disimpan (opsional)"),
     *,
     user: GeneratingUser,
     session: SessionDep,
@@ -269,6 +351,7 @@ async def generate_kontrak(
         gen_args,
         export_kontrak_to_docx,
         f"Rancangan_Kontrak_{_safe_name(nama_pekerjaan, 30)}.docx",
+        project_id,
     )
 
 
@@ -288,6 +371,7 @@ async def generate_amendemen(
     ttd_vendor_jabatan: str = Form(""),
     detail_perubahan_json: str = Form("[]"),
     file: UploadFile | None = File(None, description="PDF kontrak asal untuk konteks (opsional)"),
+    project_id: str = Form("", description="Paket tempat draf disimpan (opsional)"),
     *,
     user: GeneratingUser,
     session: SessionDep,
@@ -321,4 +405,5 @@ async def generate_amendemen(
         gen_args,
         export_amendemen_to_docx,
         f"Draft_Amendemen_{_safe_name(judul_pekerjaan, 30)}.docx",
+        project_id,
     )

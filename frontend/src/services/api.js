@@ -92,15 +92,116 @@ export async function checkHealth() {
   }
 }
 
-// BoQ boleh PDF/Excel, RKS harus PDF
-export async function extractTenderMetadata({ rksFile, boqFile, tanggal = '', resikoCsms = 'Tinggi' }) {
-  const form = new FormData()
-  if (rksFile) form.append('file_rks', rksFile)
-  if (boqFile) form.append('file_boq', boqFile)
-  form.append('tanggal', tanggal)
-  form.append('resiko_csms', resikoCsms)
+function jsonBody(body) {
+  return { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+}
+
+// Berkas acuan dipilih dari folder dataset (drive); BoQ boleh PDF/Excel, RKS harus PDF
+export async function extractTenderMetadata({ rksFileId, boqFileId, projectId, tanggal = '', resikoCsms = 'Tinggi' }) {
+  const form = toFormData({
+    rks_file_id: rksFileId ?? '',
+    boq_file_id: boqFileId ?? '',
+    project_id: projectId ?? '',
+    tanggal,
+    resiko_csms: resikoCsms,
+  })
   const res = await request('/api/extract-tender-metadata', { method: 'POST', body: form })
   return res.json()
+}
+
+// ── Sesi chat Copilot ───────────────────────────────────────
+// Nama mode di UI → tipe_dokumen di backend
+export const MODE_TO_TIPE = { tender: 'tender', rks: 'rks', contract: 'kontrak', amendment: 'amendemen' }
+export const TIPE_TO_MODE = Object.fromEntries(Object.entries(MODE_TO_TIPE).map(([mode, tipe]) => [tipe, mode]))
+
+export async function createChatSession(mode) {
+  const res = await request('/api/chat/sessions', { method: 'POST', timeoutMs: 15000, ...jsonBody({ tipe_dokumen: MODE_TO_TIPE[mode] }) })
+  return res.json()
+}
+
+export async function listChatSessions(limit = 8) {
+  const res = await request(`/api/chat/sessions?limit=${limit}`, { timeoutMs: 15000 })
+  return res.json()
+}
+
+export async function getChatSession(sessionId) {
+  const res = await request(`/api/chat/sessions/${sessionId}`, { timeoutMs: 15000 })
+  return res.json()
+}
+
+// Satu giliran agent bisa berlangsung beberapa menit (mis. Docling membaca BoQ di CPU)
+const STREAM_TIMEOUT_MS = 20 * 60 * 1000
+
+function parseSseBlock(block) {
+  let event = 'message'
+  const data = []
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('data:')) data.push(line.slice(5).trimStart())
+  }
+  return data.length ? { event, data: JSON.parse(data.join('\n')) } : null
+}
+
+// Versi streaming dari sendChatMessage (SSE lewat fetch + ReadableStream agar bisa mengirim
+// body & header Authorization). onEvent menerima ('progress' | 'token', data); hasil akhir
+// (isi event 'done') dikembalikan sebagai nilai fungsi.
+export async function streamChatMessage(sessionId, { content = '', datasetFileId = null }, onEvent) {
+  const body = { content, ...(datasetFileId ? { dataset_file_id: datasetFileId } : {}) }
+  const res = await request(`/api/chat/sessions/${sessionId}/stream`, {
+    method: 'POST',
+    timeoutMs: STREAM_TIMEOUT_MS,
+    ...jsonBody(body),
+  })
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += value.replace(/\r\n/g, '\n')
+    let boundary
+    while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+      const parsed = parseSseBlock(buffer.slice(0, boundary))
+      buffer = buffer.slice(boundary + 2)
+      if (!parsed) continue
+      if (parsed.event === 'done') return parsed.data
+      if (parsed.event === 'error') throw new ApiError(parsed.data.detail ?? 'Gagal memproses pesan.', 500)
+      onEvent?.(parsed.event, parsed.data)
+    }
+  }
+  throw new ApiError('Koneksi ke server terputus sebelum jawaban selesai.', 0)
+}
+
+export async function downloadDraft(draftId) {
+  const res = await request(`/api/drafts/${draftId}/download`, { timeoutMs: 60000 })
+  downloadBlob(await res.blob(), filenameFromResponse(res, 'Draf_RKS.docx'))
+}
+
+// ── Dataset (drive eksternal) ───────────────────────────────
+export async function listDatasetFiles({ acuan = false } = {}) {
+  const res = await request(`/api/dataset/files${acuan ? '?acuan=true' : ''}`, { timeoutMs: 15000 })
+  return res.json()
+}
+
+// Memulai sinkronisasi sebagai job latar belakang; kembalian berisi { id, status, progress }
+export async function startDatasetSync() {
+  const res = await request('/api/dataset/sync', { method: 'POST', timeoutMs: 15000 })
+  return res.json()
+}
+
+export async function getJob(jobId) {
+  const res = await request(`/api/jobs/${jobId}`, { timeoutMs: 15000 })
+  return res.json()
+}
+
+// Pantau job sampai selesai; onProgress menerima objek job setiap kali status diperiksa
+export async function waitForJob(jobId, onProgress, intervalMs = 1500) {
+  for (;;) {
+    const job = await getJob(jobId)
+    onProgress?.(job)
+    if (job.status === 'selesai') return job.result
+    if (job.status === 'gagal') throw new ApiError(job.error || 'Job gagal.', 500)
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
 }
 
 // Data amendemen di UI → field form yang diharapkan /api/generate-amendemen
@@ -132,10 +233,11 @@ const GENERATE_ENDPOINTS = {
   },
 }
 
-export async function generateDocument(mode, data) {
+// projectId (opsional) menyimpan hasilnya sebagai versi draf paket di database
+export async function generateDocument(mode, data, projectId = '') {
   const endpoint = GENERATE_ENDPOINTS[mode]
   if (!endpoint) throw new ApiError(`Mode "${mode}" tidak memiliki generator dokumen.`, 400)
-  const fields = endpoint.payload ? endpoint.payload(data) : data
+  const fields = { ...(endpoint.payload ? endpoint.payload(data) : data), project_id: projectId }
   const res = await request(endpoint.path, { method: 'POST', body: toFormData(fields) })
   const contentType = res.headers.get('Content-Type') || ''
   if (contentType.includes('application/json')) {

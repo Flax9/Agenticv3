@@ -26,8 +26,9 @@ export default function ProgressDrawer() {
   const isOpen = useAppStore((s) => s.isDrawerOpen)
   const mode = useAppStore((s) => s.mode)
   const step = useAppStore((s) => s.step)
-  const hasPackage = useAppStore((s) => Boolean(s.packages[s.mode]))
+  const hasPackage = useAppStore((s) => Boolean(s.packages[s.mode] || (s.mode === 'rks' && s.draft)))
   const resources = useAppStore((s) => s.sessionResources)
+  const activity = useAppStore((s) => s.activity)
   const toggleDrawer = useAppStore((s) => s.toggleDrawer)
   const showArtifactTab = useAppStore((s) => s.showArtifactTab)
   const close = useCallback(() => toggleDrawer(false), [toggleDrawer])
@@ -69,6 +70,21 @@ export default function ProgressDrawer() {
         </div>
 
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-5">
+          {activity && (
+            <section aria-live="polite">
+              <SectionHeader title="Proses Berjalan" />
+              <div className="flex items-start gap-3 rounded-lg border border-pertamina-blue bg-[#F0F7FF] px-3 py-2.5">
+                <span className="mt-0.5 inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-pertamina-blue border-t-transparent" />
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-[12.5px] font-bold leading-tight text-pertamina-gray-900">{activity.label}</span>
+                  <span className="mt-0.5 truncate text-[11px] text-pertamina-gray-500" title={activity.detail}>
+                    {activity.detail}
+                  </span>
+                </span>
+              </div>
+            </section>
+          )}
+
           <section>
             <SectionHeader title="Progress Tahapan" badge={`Tahap ${step} dari ${meta.stepper.length}`} />
             <ol className="flex flex-col gap-2.5">
@@ -97,7 +113,7 @@ export default function ProgressDrawer() {
             <SectionHeader title="Output Dokumen" badge={`${artifacts.length} Berkas Siap`} />
             {artifacts.length === 0 ? (
               <p className="rounded-md border border-dashed border-pertamina-gray-300 px-3 py-3 text-[11.5px] text-pertamina-gray-500">
-                Belum ada output. Unggah berkas acuan atau muat data contoh.
+                Belum ada output. Mulai percakapan, pilih berkas acuan dari drive, atau muat data contoh.
               </p>
             ) : (
               <div className="flex flex-col gap-2.5">

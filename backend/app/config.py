@@ -8,6 +8,7 @@ Agentic_Rag_Pertamina_camp masih membaca sebagian nilai via os.getenv(), sehingg
 from pathlib import Path
 
 from dotenv import load_dotenv
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -35,6 +36,19 @@ class Settings(BaseSettings):
     # Penyimpanan berkas
     output_dir: Path = PROJECT_ROOT / "output"
     max_upload_mb: int = 100
+    # Berkas sementara di OUTPUT_DIR (di luar folder drafts/) dihapus setelah sekian hari
+    temp_retention_days: int = 7
+    housekeeping_enabled: bool = True
+
+    # Folder dataset yang disinkronkan dari Google Drive / OneDrive (klien desktop atau mount).
+    # Subfolder rks_kb/, contract_kb/, amendment_kb/ di-ingest ke Qdrant; folder lain hanya berkas acuan.
+    dataset_dir: Path | None = None
+
+    @field_validator("dataset_dir", mode="before")
+    @classmethod
+    def _empty_dataset_dir(cls, value):
+        # "DATASET_DIR=" kosong berarti belum diatur, bukan direktori kerja saat ini
+        return None if isinstance(value, str) and not value.strip() else value
 
     # Database (PostgreSQL via asyncpg)
     database_url: str = "postgresql+asyncpg://pertamina_user:pertamina_dev@localhost:5432/pertamina_db"
@@ -54,6 +68,8 @@ settings = Settings()
 
 ASSETS_DIR = BACKEND_DIR / "assets"
 OUTPUT_DIR = settings.output_dir
+# Salinan .docx milik draf (tidak ikut dibersihkan otomatis)
+DRAFTS_DIR = OUTPUT_DIR / "drafts"
 
 # Konstanta yang dipakai modul AI hasil porting (nama dipertahankan agar import tetap sama)
 EMBEDDING_MODEL = settings.embedding_model

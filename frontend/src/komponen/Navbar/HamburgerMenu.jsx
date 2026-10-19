@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { TIPE_TO_MODE, listChatSessions } from '../../services/api'
 import { MODE_META } from '../../services/modes'
 import { ROLE_LABELS } from '../../services/permissions'
 import { useAuthStore } from '../../services/useAuthStore'
@@ -53,11 +54,27 @@ export default function HamburgerMenu() {
   const openDocPicker = useAppStore((s) => s.openDocPicker)
   const askConfirm = useAppStore((s) => s.askConfirm)
   const pushToast = useAppStore((s) => s.pushToast)
+  const openSession = useAppStore((s) => s.openSession)
+  const activeSessionId = useAppStore((s) => s.session?.id)
   const user = useAuthStore((s) => s.user)
+  // Riwayat sesi dimuat setiap kali menu dibuka: null = sedang memuat
+  const [history, setHistory] = useState(null)
   const logout = useAuthStore((s) => s.logout)
 
   const close = useCallback(() => setOpen(false), [])
   useEscapeKey(close, open)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    listChatSessions(5)
+      .then((rows) => !cancelled && setHistory(rows))
+      .catch(() => !cancelled && setHistory([]))
+    return () => {
+      cancelled = true
+      setHistory(null)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -75,9 +92,9 @@ export default function HamburgerMenu() {
 
   const resetSession = () =>
     askConfirm({
-      title: 'Reset sesi percakapan?',
-      message: `Mulai sesi baru untuk ${MODE_META[mode].title}? Percakapan saat ini akan dibersihkan.`,
-      confirmLabel: 'Reset Sesi',
+      title: 'Mulai sesi baru?',
+      message: `Mulai sesi baru untuk ${MODE_META[mode].title}? Sesi saat ini tetap tersimpan di Riwayat Sesi.`,
+      confirmLabel: 'Sesi Baru',
       onConfirm: () => {
         setMode(mode)
         openDocPicker()
@@ -87,7 +104,7 @@ export default function HamburgerMenu() {
   const confirmLogout = () =>
     askConfirm({
       title: 'Keluar dari akun?',
-      message: 'Percakapan dan draf yang belum diunduh pada sesi ini akan dibersihkan.',
+      message: 'Percakapan dan draf tetap tersimpan dan bisa dibuka lagi dari Riwayat Sesi.',
       confirmLabel: 'Keluar',
       onConfirm: logout,
     })
@@ -153,6 +170,30 @@ export default function HamburgerMenu() {
           </div>
 
           <div className="h-px bg-pertamina-gray-200" />
+          <MenuHeader>Riwayat Sesi</MenuHeader>
+          <div className="max-h-[210px] overflow-y-auto p-1">
+            {history === null && <p className="px-3 py-2 text-[11px] text-pertamina-gray-500">Memuat...</p>}
+            {history?.length === 0 && <p className="px-3 py-2 text-[11px] text-pertamina-gray-500">Belum ada sesi tersimpan.</p>}
+            {history?.map((h) => {
+              const meta = MODE_META[TIPE_TO_MODE[h.tipe_dokumen]]
+              return (
+                <MenuItem
+                  key={h.id}
+                  icon={meta?.icon ?? '💬'}
+                  title={h.nama_pengadaan}
+                  sub={new Date(h.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                  onClick={run(() => openSession(h.id))}
+                  right={
+                    h.id === activeSessionId && (
+                      <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-800">AKTIF</span>
+                    )
+                  }
+                />
+              )
+            })}
+          </div>
+
+          <div className="h-px bg-pertamina-gray-200" />
           <MenuHeader>Referensi & Manajemen</MenuHeader>
           <div className="p-1">
             <MenuItem icon="🗄️" title="Knowledge Base" sub="Qdrant Vector Database" onClick={run(() => setMode('kb'))} />
@@ -163,8 +204,8 @@ export default function HamburgerMenu() {
           <div className="p-1">
             <MenuItem
               icon="🔄"
-              title="Reset Sesi Percakapan"
-              sub="Bersihkan percakapan & mulai ulang"
+              title="Mulai Sesi Baru"
+              sub="Sesi lama tetap ada di riwayat"
               danger
               onClick={run(resetSession)}
             />

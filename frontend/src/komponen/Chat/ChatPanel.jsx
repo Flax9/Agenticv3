@@ -8,10 +8,65 @@ import ChatInput from './ChatInput'
 import QuickActionChips from './QuickActionChips'
 import WorkflowStepper from './WorkflowStepper'
 
-function WelcomeMessage({ onUpload }) {
-  const mode = useAppStore((s) => s.mode)
+const primaryButton =
+  'flex items-center gap-1.5 rounded-md bg-pertamina-blue px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-[#005FA8] disabled:opacity-50'
+const secondaryButton =
+  'flex items-center gap-1.5 rounded-md border border-pertamina-gray-300 bg-white px-4 py-1.5 text-xs font-semibold text-pertamina-navy transition hover:border-pertamina-gray-400 hover:bg-pertamina-gray-100 disabled:opacity-50'
+
+// Ajakan awal per mode. Hanya RKS yang sudah punya agent chat; Tender memakai ekstraksi berkas dari drive
+function StartCard({ mode }) {
   const isBusy = useAppStore((s) => s.isBusy)
   const loadDemo = useAppStore((s) => s.loadDemo)
+  const sendMessage = useAppStore((s) => s.sendMessage)
+  const openDatasetPicker = useAppStore((s) => s.openDatasetPicker)
+
+  const content = {
+    rks: {
+      title: 'Susun RKS Bersama Copilot',
+      desc: 'Copilot akan menanyakan informasi pekerjaan satu per satu, mencari contoh RKS di knowledge base, lalu menyusun draf yang bisa Anda tinjau dan minta revisinya.',
+      actions: (
+        <button type="button" onClick={() => sendMessage('Saya ingin membuat dokumen RKS baru')} disabled={isBusy} className={primaryButton}>
+          📝 Mulai Buat RKS
+        </button>
+      ),
+    },
+    tender: {
+      title: 'Mulai dari Berkas di Drive',
+      desc: 'Pilih berkas BoQ atau RKS dari folder drive untuk mengekstrak parameter pengadaan secara otomatis, atau gunakan data contoh untuk demonstrasi.',
+      actions: (
+        <>
+          <button type="button" onClick={() => openDatasetPicker('extract')} disabled={isBusy} className={primaryButton}>
+            📂 Pilih Berkas dari Drive
+          </button>
+          <button type="button" onClick={loadDemo} disabled={isBusy} className={secondaryButton}>
+            ✨ Muat Data Contoh (Demo)
+          </button>
+        </>
+      ),
+    },
+  }[mode] ?? {
+    title: 'Asisten Percakapan Sedang Disiapkan',
+    desc: 'Copilot untuk jenis dokumen ini masih dikembangkan oleh tim AI. Untuk sementara, muat data contoh lalu sesuaikan isinya di kanvas sebelum mengunduh .docx.',
+    actions: (
+      <button type="button" onClick={loadDemo} disabled={isBusy} className={secondaryButton}>
+        ✨ Muat Data Contoh (Demo)
+      </button>
+    ),
+  }
+
+  return (
+    <div className="mt-2.5 rounded-lg border-2 border-dashed border-blue-300 bg-pertamina-gray-50 p-5 text-center transition hover:border-pertamina-blue hover:bg-blue-50">
+      <div className="mb-2 text-[32px]">{MODE_META[mode].icon}</div>
+      <div className="mb-1 text-[13.5px] font-bold text-pertamina-navy">{content.title}</div>
+      <div className="mx-auto mb-3.5 max-w-md text-[11.5px] text-pertamina-gray-500">{content.desc}</div>
+      <div className="flex flex-wrap justify-center gap-2.5">{content.actions}</div>
+    </div>
+  )
+}
+
+function WelcomeMessage() {
+  const mode = useAppStore((s) => s.mode)
+  const hasMessages = useAppStore((s) => s.messages.length > 0)
   const canDraft = useAuthStore((s) => can(s.user, 'draft'))
   const meta = MODE_META[mode]
 
@@ -23,38 +78,11 @@ function WelcomeMessage({ onUpload }) {
       </p>
       {mode !== 'kb' && !canDraft && (
         <p className="mt-2.5 rounded-md border border-pertamina-gray-200 bg-pertamina-gray-50 px-3 py-2 text-xs text-pertamina-gray-600">
-          Peran Anda bersifat <strong>tinjau saja</strong>: Anda dapat melihat dokumen, tetapi tidak dapat mengunggah berkas atau
+          Peran Anda bersifat <strong>tinjau saja</strong>: Anda dapat melihat dokumen, tetapi tidak dapat memulai sesi atau
           merevisi draf.
         </p>
       )}
-      {mode !== 'kb' && canDraft && (
-        <div className="mt-2.5 rounded-lg border-2 border-dashed border-blue-300 bg-pertamina-gray-50 p-5 text-center transition hover:border-pertamina-blue hover:bg-blue-50">
-          <div className="mb-2 text-[32px]">📁</div>
-          <div className="mb-1 text-[13.5px] font-bold text-pertamina-navy">Mulai Sesi Penyusunan Dokumen</div>
-          <div className="mb-3.5 text-[11.5px] text-pertamina-gray-500">
-            Unggah berkas acuan (BoQ / RKS, PDF atau Excel) untuk ekstraksi parameter otomatis, atau gunakan data contoh
-            untuk demonstrasi.
-          </div>
-          <div className="flex flex-wrap justify-center gap-2.5">
-            <button
-              type="button"
-              onClick={onUpload}
-              disabled={isBusy}
-              className="flex items-center gap-1.5 rounded-md bg-pertamina-blue px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-[#005FA8] disabled:opacity-50"
-            >
-              ☁️ Unggah Berkas PDF/Excel
-            </button>
-            <button
-              type="button"
-              onClick={loadDemo}
-              disabled={isBusy}
-              className="flex items-center gap-1.5 rounded-md border border-pertamina-gray-300 bg-white px-4 py-1.5 text-xs font-semibold text-pertamina-navy transition hover:border-pertamina-gray-400 hover:bg-pertamina-gray-100 disabled:opacity-50"
-            >
-              ✨ Muat Data Contoh (Demo)
-            </button>
-          </div>
-        </div>
-      )}
+      {mode !== 'kb' && canDraft && !hasMessages && <StartCard mode={mode} />}
     </ChatBubble>
   )
 }
@@ -62,9 +90,9 @@ function WelcomeMessage({ onUpload }) {
 export default function ChatPanel({ className = '' }) {
   const messages = useAppStore((s) => s.messages)
   const isBusy = useAppStore((s) => s.isBusy)
+  const mode = useAppStore((s) => s.mode)
   const canDraft = useAuthStore((s) => can(s.user, 'draft'))
   const streamRef = useRef(null)
-  const fileInputRef = useRef(null)
 
   useEffect(() => {
     const el = streamRef.current
@@ -76,7 +104,7 @@ export default function ChatPanel({ className = '' }) {
       <WorkflowStepper />
 
       <div ref={streamRef} className="flex flex-1 flex-col gap-[18px] overflow-y-auto p-5" aria-live="polite">
-        <WelcomeMessage onUpload={() => fileInputRef.current?.click()} />
+        <WelcomeMessage />
         {messages.map((m) => (
           <ChatBubble key={m.id} message={m} />
         ))}
@@ -89,10 +117,10 @@ export default function ChatPanel({ className = '' }) {
         )}
       </div>
 
-      {canDraft && (
+      {canDraft && mode !== 'kb' && (
         <>
           <QuickActionChips />
-          <ChatInput fileInputRef={fileInputRef} />
+          <ChatInput />
         </>
       )}
     </section>

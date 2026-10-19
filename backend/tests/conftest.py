@@ -20,6 +20,7 @@ if not TEST_DATABASE_URL:
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["DEBUG"] = "false"
 os.environ["COOKIE_SECURE"] = "false"  # TestClient memakai http://
+os.environ["HOUSEKEEPING_ENABLED"] = "false"  # jangan sentuh folder output development
 os.environ.setdefault("JWT_SECRET", "test-secret-" + "x" * 40)
 
 from alembic.config import Config
@@ -114,3 +115,8 @@ async def _fetch(sql: str, params: dict) -> list:
 def query(sql: str, **params) -> list:
     """Baca langsung dari database test (untuk memeriksa audit trail, dll.)."""
     return asyncio.run(_fetch(sql, params))
+
+
+def execute(sql: str, **params) -> None:
+    """Jalankan perintah tulis langsung ke database test (mis. membersihkan tabel)."""
+    asyncio.run(_run_sql([(sql, params)]))

@@ -15,8 +15,16 @@ Sistem ini mengadopsi **Opsi A (Nginx Reverse Proxy Decoupled)**, di mana:
 3. **SQLAlchemy 2.0 (Async) + Alembic**: Menangani persistensi data relasional ke PostgreSQL untuk 9 tabel (1 tabel pengguna + 8 tabel pengadaan), riwayat chat, dan audit kepatuhan.
 4. **Autentikasi & Otorisasi Berbasis Peran (RBAC)**: Setiap aksi (membuat paket, merevisi pasal, menyetujui dokumen, mengunduh) terikat pada akun pengguna dan perannya, sehingga jejak audit dapat dipertanggungjawabkan (lihat Bagian 4.4 & 9.3).
 
+### 1.0 Revisi Arah Produk (19 Oktober 2026)
+Keputusan pemilik proyek web:
+1. **Produk akhir adalah generator dokumen berbasis chatbot** yang memberi arahan dan *feedback* kepada pengguna yang belum berpengalaman. Copilot menanyakan informasi satu per satu, menyusun draf, lalu menerima permintaan revisi sebelum ekspor `.docx`.
+2. **Tidak ada lagi unggah BoQ dari browser.** AI membaca knowledge base yang di-ingest dari **folder drive eksternal** (Google Drive / OneDrive). Folder disinkronkan ke server oleh klien desktop resmi (atau di-mount) dan diarahkan lewat `DATASET_DIR`. Subfolder `rks_kb/`, `contract_kb/`, dan `amendment_kb/` di-ingest ke Qdrant; folder lain menjadi berkas acuan (mis. BoQ per paket) yang bisa dipilih di chat.
+3. **Fokus saat ini hanya pembuatan draf.** Kolom & peran persetujuan (`status_approval`, `APPROVER`) tetap ada di skema, tetapi alur persetujuan belum dibangun.
+4. Server masih berupa **laptop** (demo lokal); domain & sertifikat TLS belum ada, tetapi tempatnya disiapkan. Commit dilakukan lokal; push dilakukan sendiri oleh pemilik proyek.
+5. Seluruh pertanyaan seputar AI dikumpulkan di `pertanyaan penanggung jawab ai.md`. Tim web tidak mengubah logika AI dan bekerja dengan asumsi yang ditandai **[Asumsi web]**.
+
 ### 1.1 Prinsip Pengembangan Bertahap
-1. **Satu alur nyata lebih dulu**: Upload BoQ → Ekstraksi → Tampil di Canvas → Unduh `.docx` harus berjalan *end-to-end* sebelum fitur lain ditambahkan.
+1. **Satu alur nyata lebih dulu**: Chat RKS → Agent menanyakan informasi (BoQ dipilih dari drive) → Draf tampil di Canvas → Revisi/Setuju → Unduh `.docx` harus berjalan *end-to-end* sebelum fitur lain ditambahkan.
 2. **Infrastruktur menyusul kebutuhan**: Celery + Redis hanya diaktifkan bila proses generate dokumen terbukti melampaui batas timeout HTTP (lihat Fase 4). Hingga saat itu, cukup memakai `run_in_threadpool` / `BackgroundTasks` FastAPI seperti pada `api.py` saat ini.
 
 ---
@@ -608,6 +616,28 @@ erDiagram
 
 ---
 
+#### 10. Tabel: `procurement_dataset_file` (ditambahkan Fase 3, migrasi `8aca9b2ff148`)
+* **Deskripsi:** Catatan setiap berkas di folder dataset drive (`DATASET_DIR`) beserta status ingest-nya ke Qdrant. Sinkronisasi membandingkan ukuran, waktu ubah, dan `hash_sha256`, sehingga berkas yang tidak berubah tidak di-ingest ulang.
+* **Tabel Spesifikasi:**
+
+| Nama Kolom | Tipe Data | Constraint | Keterangan & Aturan Bisnis |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | `PRIMARY KEY` | ID berkas (dipakai frontend saat memilih berkas acuan) |
+| `relative_path` | `VARCHAR(1000)` | `NOT NULL`, `UNIQUE` | Path relatif terhadap `DATASET_DIR` (pemisah `/`) |
+| `nama_file` | `VARCHAR(255)` | `NOT NULL` | Nama berkas; dipakai sebagai `source` di Qdrant |
+| `collection` | `VARCHAR(50)` | Nullable, `INDEX` | `rks_kb` / `contract_kb` / `amendment_kb`; `NULL` = berkas acuan |
+| `ukuran_bytes` | `BIGINT` | `NOT NULL`, `CHECK >= 0` | Ukuran berkas |
+| `modified_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL` | Waktu ubah berkas di folder |
+| `hash_sha256` | `VARCHAR(64)` | `NOT NULL`, `INDEX` | Sidik isi berkas |
+| `status` | `VARCHAR(20)` | `NOT NULL`, `CHECK` | `TERINDEKS`, `REFERENSI`, `DILEWATI` (format belum didukung / nama ganda), `GAGAL` |
+| `jumlah_chunk` | `INTEGER` | Default `0` | Jumlah chunk hasil ingest |
+| `pesan` | `TEXT` | Nullable | Alasan dilewati / pesan error |
+| `created_at`, `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL` | Waktu pencatatan |
+
+Perubahan lain pada migrasi yang sama: kolom **`konten_json` (`JSONB`)** di `procurement_document_draft` (JSON draf RKS dari agent, atau parameter formulir untuk generator lain) dan nilai `tipe_aksi` baru `SINKRON_DATASET`.
+
+---
+
 ### 4.3 Aturan Integritas Data & Indeks (*Database Indexing*)
 1. **Foreign Key Cascading & Soft Delete**:
    * Penghapusan paket dari UI menggunakan **soft delete** (`deleted_at` diisi), bukan `DELETE` fisik. Seluruh query daftar paket wajib memfilter `deleted_at IS NULL`.
@@ -669,22 +699,25 @@ Penegakan dilakukan di backend melalui dependency `require_role(...)` pada setia
 - [x] Frontend: `LoginPage`, `ProtectedRoute`, dan `api.js` yang menyisipkan header `Authorization: Bearer <token>` (access token hanya di memori, refresh lewat cookie HttpOnly, retry otomatis sekali saat 401), serta tombol yang disembunyikan sesuai peran (`services/permissions.js`).
 
 ### Fase 3: Integrasi Modul AI RAG ke Endpoint FastAPI & UI React
-- [x] Pindahkan logic dari `Agentic_Rag_Pertamina_camp` (`RAG/`, `tender/`, `contract/`) ke `backend/app/services/` (disalin; import ditulis ulang ke `app.services.*`).
+- [x] Pindahkan logic dari `Agentic_Rag_Pertamina_camp` (`RAG/`, `tender/`, `contract/`, dan `agent.py` → `services/agent/graph.py`) ke `backend/app/services/` (disalin; hanya import yang ditulis ulang ke `app.services.*`).
 - [ ] Koordinasi dengan tim AI: generator mengembalikan draf secara langsung (bukan lewat variabel global modul) agar lock sementara di `tender_routes.py` bisa dihapus (`pertanyaan penanggung jawab ai.md` C4).
-- [ ] Implementasikan router endpoint asinkron di `backend/app/api/` (seluruhnya membutuhkan login):
-  - `POST /api/extract-tender-metadata` (Ekstraksi BoQ Excel/PDF & RKS PDF acuan; field `file_boq` dan `file_rks` dikirim sesuai jenis berkas).
-  - `POST /api/generate-tender` (Export 40 Poin IKPP .docx).
-  - `POST /api/generate-rks` (Export RKS .docx).
-  - `POST /api/generate-kontrak` (Export Kontrak .docx).
-  - `POST /api/generate-amendemen` (Export Amendemen .docx).
-  - `POST /api/kb/ingest` & `GET /api/kb/list` (Koneksi Qdrant Vector Store).
-- [ ] Simpan hasil ekstraksi & dokumen ke tabel terkait (bukan hanya dikembalikan sebagai file).
-- [ ] Hubungkan komponen React `CanvasReview` dan `ChatPanel` dengan endpoint FastAPI via `frontend/src/services/api.js`.
+- [x] Router endpoint asinkron di `backend/app/api/` (seluruhnya membutuhkan login):
+  - `POST /api/extract-tender-metadata`: berkas acuan dipilih dari folder drive (`rks_file_id` / `boq_file_id`); field unggah `file_rks`/`file_boq` tetap diterima API tetapi tidak lagi dipakai UI. Hasil disimpan ke `metadata_ekstraksi` paket bila `project_id` dikirim.
+  - `POST /api/generate-tender|rks|kontrak|amendemen`: menerima `project_id` opsional, lalu menyimpan versi draf (`konten_json` + salinan `.docx` di `output/drafts/`).
+  - `POST /api/kb/ingest`, `GET /api/kb/list`, `DELETE /api/kb/delete` (Qdrant).
+  - **Baru:** `GET /api/dataset/files` & `POST /api/dataset/sync` (folder drive → Qdrant; tabel `procurement_dataset_file`).
+  - **Baru:** `POST /api/chat/sessions`, `GET /api/chat/sessions[/{id}]`, `POST /api/chat/sessions/{id}/messages` (agent RKS; satu sesi = satu paket = satu `thread_id` LangGraph), `GET /api/drafts/{id}/download`.
+- [x] Simpan hasil ekstraksi, percakapan, dan draf ke tabel terkait (`procurement_tender_project`, `procurement_chat_session/message`, `procurement_document_draft` berversi).
+- [x] Hubungkan `ChatPanel`, `CanvasReview` (`RksDraftView` untuk JSON draf agent), `DatasetPickerModal` (pengganti unggah berkas), `KnowledgeBaseView` (status folder drive), dan riwayat sesi di `HamburgerMenu` ke FastAPI via `services/api.js`.
+- [x] Pengaman web di sekitar agent: saat agent meminta BoQ, hanya "lewati" atau berkas dari `DATASET_DIR` yang diteruskan (agent menerima path berkas lokal); stdout dipaksa UTF-8 agar `print()` emoji di modul AI tidak menggagalkan request di Windows.
+- [x] **Milestone Fase 3** (terverifikasi 19 Okt 2026 dengan LLM & Qdrant sungguhan): chat RKS → BoQ dipilih dari drive → 6 informasi dikumpulkan → draf v1.0 → "setuju" → `.docx` (60 KB) terunduh → riwayat 23 pesan tersimpan.
+- Catatan: agent hanya tersedia untuk RKS. Sesi Tender/Kontrak/Amendemen menjawab "asisten belum tersedia" dan dokumen dibuat lewat kanvas + endpoint generate (`pertanyaan penanggung jawab ai.md` F1).
 
 ### Fase 4: Streaming Token AI (SSE) & Pemrosesan Latar Belakang
-- [ ] Implementasikan endpoint `POST /api/chat/stream` menggunakan Server-Sent Events (SSE) untuk streaming token balasan AI per kata (frontend membaca via `fetch` + `ReadableStream` agar bisa mengirim body & header Authorization).
-- [ ] Ukur durasi generate `.docx` & ekstraksi BoQ. **Hanya bila** prosesnya melampaui ±60 detik secara konsisten, aktifkan Celery + Redis (profil compose `worker`, lihat 8.3) dan ubah endpoint menjadi pola *job*: `POST` → `job_id`, lalu `GET /api/jobs/{job_id}` untuk status.
-- [ ] Sinkronkan status proses dengan komponen React `ProgressDrawer` dan `VerticalRestoreTab`.
+- [x] `POST /api/chat/sessions/{id}/stream` (SSE): event `progress` (label tiap node agent), `token` (hanya node `direct_answer` & `kb_answer`), `done` (isi sama dengan endpoint non-stream), `error`, plus komentar heartbeat `: ping` tiap 15 detik. Header `X-Accel-Buffering: no`. Frontend membaca via `fetch` + `ReadableStream` (`streamChatMessage`).
+- [x] Ukur durasi (19 Okt 2026, laptop): klarifikasi 12–29 detik, draf RKS ±114 detik, Docling BoQ ±452 detik, ekstraksi Tender ±44 detik. **Keputusan:** chat tetap satu request SSE (heartbeat mencegah timeout proxy); sinkronisasi drive memakai pola *job* in-process (`core/jobs.py`: `POST /api/dataset/sync` → 202 + `job_id`, lalu `GET /api/jobs/{job_id}`). Celery + Redis belum diaktifkan, karena backend dijalankan satu proses. Aktifkan bila nanti multi-worker.
+- [x] Status proses tampil di `ProgressDrawer` (bagian "Proses Berjalan") dan indikator kuning berkedip di `VerticalRestoreTab`; bubble chat sementara menampilkan tahap agent lalu token jawaban.
+- [x] Housekeeping (masterplan 9.2) sebagai task periodik di *lifespan* FastAPI: berkas di `OUTPUT_DIR` yang lebih tua dari `TEMP_RETENTION_DAYS` (7 hari) dihapus, kecuali `output/drafts/`.
 
 ### Fase 5: Dockerization, Nginx Gateway, & Pipeline CI/CD
 - [ ] Susun `backend/Dockerfile` (Python FastAPI + Uvicorn) dan `frontend/Dockerfile` (Node build → Nginx).

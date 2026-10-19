@@ -1,14 +1,18 @@
-import { QUICK_CHIPS } from '../../services/modes'
+import { quickChips } from '../../services/modes'
 import { useAppStore } from '../../services/useAppStore'
 
 export default function QuickActionChips() {
   const mode = useAppStore((s) => s.mode)
+  const awaiting = useAppStore((s) => s.awaiting)
   const isBusy = useAppStore((s) => s.isBusy)
   const sendMessage = useAppStore((s) => s.sendMessage)
+  const chips = quickChips(mode, awaiting)
+
+  if (chips.length === 0) return null
 
   return (
     <div className="flex shrink-0 gap-2 overflow-x-auto px-5 pb-1 pt-2.5 no-scrollbar">
-      {QUICK_CHIPS[mode].map((chip) => (
+      {chips.map((chip) => (
         <button
           key={chip.prompt}
           type="button"

@@ -80,6 +80,8 @@ class DocumentDraft(Base):
     versi: Mapped[str] = mapped_column(String(20), default="v1.0", server_default="v1.0")
     judul_dokumen: Mapped[str] = mapped_column(String(255))
     file_docx_path: Mapped[str | None] = mapped_column(String(500))
+    # Isi draf terstruktur: JSON RKS dari agent, atau parameter form untuk generator lain
+    konten_json: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
     # NULL = belum dinilai (sengaja tanpa default 100)
     skor_kepatuhan_stk: Mapped[int | None] = mapped_column(SmallInteger)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")

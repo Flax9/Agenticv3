@@ -79,6 +79,14 @@ class TipeAksi(str, Enum):
     KB_INGEST = "KB_INGEST"
     KB_HAPUS = "KB_HAPUS"
     KELOLA_USER = "KELOLA_USER"
+    SINKRON_DATASET = "SINKRON_DATASET"
+
+
+class StatusDataset(str, Enum):
+    TERINDEKS = "TERINDEKS"  # sudah di-ingest ke collection Qdrant
+    REFERENSI = "REFERENSI"  # di luar folder collection: hanya bisa dipilih sebagai berkas acuan
+    DILEWATI = "DILEWATI"  # format belum didukung atau nama berkas ganda dalam satu collection
+    GAGAL = "GAGAL"  # ingest error
 
 
 class ModulTerkait(str, Enum):

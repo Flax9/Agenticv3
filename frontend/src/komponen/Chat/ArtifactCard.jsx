@@ -7,7 +7,8 @@ export default function ArtifactCard({ icon, title, sub }) {
   const showArtifactTab = useAppStore((s) => s.showArtifactTab)
   const downloadDocx = useAppStore((s) => s.downloadDocx)
   const isDownloading = useAppStore((s) => s.isDownloading)
-  const hasPackage = useAppStore((s) => Boolean(s.packages[s.mode]))
+  // Draf RKS dari agent baru bisa diunduh setelah diekspor; mode lain cukup punya data paket
+  const hasPackage = useAppStore((s) => (s.mode === 'rks' && s.draft ? s.draft.has_docx : Boolean(s.packages[s.mode])))
   const canGenerate = useAuthStore((s) => can(s.user, 'generate'))
 
   return (
@@ -34,7 +35,7 @@ export default function ArtifactCard({ icon, title, sub }) {
             type="button"
             onClick={downloadDocx}
             disabled={!hasPackage || isDownloading}
-            title={hasPackage ? 'Unduh dokumen .docx' : 'Terapkan parameter terlebih dahulu'}
+            title={hasPackage ? 'Unduh dokumen .docx' : 'Draf belum siap diunduh'}
             className="rounded-md border border-pertamina-gray-200 bg-pertamina-gray-100 px-3 py-1.5 text-[11.5px] font-bold text-pertamina-gray-600 transition hover:bg-pertamina-gray-200 hover:text-pertamina-navy disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isDownloading ? 'Membuat...' : 'Unduh .DOCX'}

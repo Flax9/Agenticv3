@@ -1,7 +1,7 @@
 // Cermin matriks peran masterplan 4.4. Hanya untuk menyembunyikan tombol di UI;
 // penegakan sebenarnya ada di backend (require_role).
 const PERMISSIONS = {
-  draft: ['ADMIN', 'PROCUREMENT', 'FPP'], // upload, ekstraksi, chat, revisi
+  draft: ['ADMIN', 'PROCUREMENT', 'FPP'], // sesi chat, ekstraksi, revisi
   generate: ['ADMIN', 'PROCUREMENT', 'FPP', 'APPROVER'], // unduh .docx
   manageKb: ['ADMIN', 'PROCUREMENT'],
 }

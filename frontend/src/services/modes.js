@@ -4,7 +4,7 @@ export const MODE_META = {
     icon: '📄',
     title: 'Dokumen Tender (IKPP & Kontrak)',
     badge: 'Versi 2.0 (40 Poin & Kontrak)',
-    stepper: ['Upload BOQ/RKS', 'Auto-Ekstraksi', 'Verifikasi Klausul', 'Terbitkan Dokumen'],
+    stepper: ['Pilih BoQ/RKS dari Drive', 'Auto-Ekstraksi', 'Verifikasi Klausul', 'Terbitkan Dokumen'],
     matrixLabel: '📊 Matriks HPS',
     artifacts: [
       { tab: 'previewTab', title: 'Dokumen Tender Versi 2.0 (IKPP & Kontrak)', format: '.docx', desc: '40 Poin Ketentuan Khusus & Kontrak' },
@@ -16,7 +16,7 @@ export const MODE_META = {
     icon: '📋',
     title: 'Dokumen RKS',
     badge: 'Spesifikasi Teknis (Bab I-V)',
-    stepper: ['Input Lingkup & BoQ', 'Pencarian KB', 'Review Bab RKS', 'Export Word'],
+    stepper: ['Informasi Pekerjaan', 'BoQ & Referensi KB', 'Review Draf RKS', 'Export Word'],
     matrixLabel: '📊 Ringkasan',
     artifacts: [
       { tab: 'previewTab', title: 'Spesifikasi Teknis RKS (Bab I - V)', format: '.docx', desc: 'Naskah 5 Bab Spesifikasi Teknis & K3' },
@@ -46,7 +46,7 @@ export const MODE_META = {
     icon: '🗄️',
     title: 'Knowledge Base Management',
     badge: 'Qdrant Vector Store',
-    stepper: ['Pilih Collection', 'Upload Referensi', 'Chunking & Indexing', 'Kelola Dokumen'],
+    stepper: ['Isi Folder Drive', 'Sinkronkan', 'Chunking & Indexing', 'Kelola Dokumen'],
     matrixLabel: null,
     artifacts: [
       { tab: 'previewTab', title: 'Indeks Koleksi Qdrant', format: 'Vector DB', desc: 'Knowledge Base Regulasi Pengadaan' },
@@ -62,32 +62,23 @@ export const DOC_CHOICES = [
   { mode: 'amendment', icon: '📎', title: 'Draft Amendemen', desc: 'Addendum perubahan nilai/waktu dengan tabel komparasi lama vs baru.', tag: 'Legal Drafting' },
 ]
 
-export const QUICK_CHIPS = {
-  tender: [
-    { text: '⏱️ Ubah Pemeliharaan 180 Hari', prompt: 'Atur Masa Pemeliharaan menjadi 180 hari kalender' },
-    { text: '🏦 Jaminan Pelaksanaan 5%', prompt: 'Wajibkan Jaminan Pelaksanaan 5% dari Nilai Kontrak' },
-    { text: '📊 Cek Skor Kepatuhan STK', prompt: 'Tampilkan skor kepatuhan checklist mandatory' },
-    { text: '💰 Lihat Rincian HPS', prompt: 'Lihat rincian kalkulasi HPS dan K&R' },
-  ],
-  rks: [
-    { text: '➕ Tambah Spesifikasi Material Baja', prompt: 'Tambahkan rincian teknis plat baja ASTM A36 pada Bab II' },
-    { text: '🛡️ Standar CSMS Kategori Tinggi', prompt: 'Pastikan persyaratan CSMS minimal kategori High Risk' },
-    { text: '📋 Lihat Struktur 5 Bab', prompt: 'Tampilkan draft struktur bab RKS lengkap' },
-  ],
-  contract: [
-    { text: '🏢 Ganti Vendor', prompt: 'Ganti pihak kedua / vendor menjadi PT Contoh Energi Utama' },
-    { text: '💰 Nilai Kontrak Rp 9.5 Miliar', prompt: 'Ubah total nilai kontrak menjadi Rp 9.500.000.000' },
-    { text: '⚖️ Denda 1 per mil per hari', prompt: 'Terapkan ketentuan denda keterlambatan 1 permil per hari (maks 5%)' },
-  ],
-  amendment: [
-    { text: '📈 Tambah Nilai Kontrak 12%', prompt: 'Buatkan addendum penambahan nilai kontrak sebesar 12% karena volume bertambah' },
-    { text: '⏱️ Perpanjang Waktu 45 Hari', prompt: 'Tambahkan klausul perpanjangan waktu pelaksanaan selama 45 hari kalender' },
-    { text: '📜 Lihat Tabel Komparasi', prompt: 'Tampilkan tabel perbandingan kondisi lama vs kondisi baru' },
-  ],
-  kb: [
-    { text: '📂 Lihat Dokumen rks_kb', prompt: 'Tampilkan daftar berkas terindeks di collection rks_kb' },
-    { text: '📝 Lihat contract_kb', prompt: 'Tampilkan daftar berkas di collection contract_kb' },
-  ],
+// Saran pesan cepat. Hanya mode RKS yang sudah punya agent chat dari tim AI;
+// mode lain belum diberi saran agar user tidak mengira chat bisa mengubah dokumennya.
+const RKS_CHIPS = [
+  { text: '📝 Mulai Buat RKS', prompt: 'Saya ingin membuat dokumen RKS baru' },
+  { text: '📋 Bab Wajib RKS', prompt: 'Apa saja bab yang wajib ada dalam dokumen RKS?' },
+  { text: '🛡️ Persyaratan CSMS', prompt: 'Apa persyaratan CSMS untuk pekerjaan berisiko tinggi?' },
+]
+
+// Saran saat agent sedang menunggu jawaban tertentu (node interrupt)
+const AWAITING_CHIPS = {
+  upload_boq: [{ text: '⏭️ Lanjut Tanpa BoQ', prompt: 'lewati' }],
+  review_rks: [{ text: '✅ Setuju & Ekspor .docx', prompt: 'setuju' }],
+}
+
+export function quickChips(mode, awaiting) {
+  if (mode !== 'rks') return []
+  return AWAITING_CHIPS[awaiting] ?? RKS_CHIPS
 }
 
 export const KB_COLLECTIONS = [
