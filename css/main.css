@@ -466,16 +466,18 @@ body {
   color: white;
   border: 1.5px solid rgba(255, 255, 255, 0.25);
   border-right: none;
-  padding: 10px 14px 10px 12px;
+  padding: 14px 7px 12px;
   border-radius: var(--radius-md) 0 0 var(--radius-md);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: -4px 0 18px rgba(0, 45, 98, 0.25);
+  box-shadow: -4px 0 16px rgba(0, 45, 98, 0.22);
   z-index: 99;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
   transition: all var(--transition-fast);
+  user-select: none;
 }
 
 .app-workspace.canvas-hidden ~ .btn-restore-canvas,
@@ -485,23 +487,42 @@ body {
 
 .btn-restore-canvas:hover {
   background: var(--pertamina-navy-light);
-  padding-left: 16px;
-  box-shadow: -6px 0 24px rgba(0, 45, 98, 0.35);
+  transform: translateY(-50%) translateX(-3px);
+  box-shadow: -6px 0 22px rgba(0, 45, 98, 0.35);
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
 .restore-arrow {
-  font-size: 11px;
+  font-size: 9px;
   color: #93C5FD;
+  transition: transform var(--transition-fast);
 }
 
-.badge-restore {
+.btn-restore-canvas:hover .restore-arrow {
+  transform: translateX(-2px);
+}
+
+.restore-icon {
+  font-size: 13px;
+}
+
+.restore-text-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  letter-spacing: 0.6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #F8FAFD;
+  white-space: nowrap;
+}
+
+.badge-restore-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   background: #10B981;
-  color: white;
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: var(--radius-full);
-  text-transform: uppercase;
-  font-weight: 800;
+  box-shadow: 0 0 6px #10B981;
 }
 
 /* Utility Helpers */
