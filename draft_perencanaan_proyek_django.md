@@ -114,6 +114,35 @@ pertamina_procurement/
 
 ## 4. Desain Database & Kamus Data Lengkap (Database Specifications)
 
+1. **`TenderProject`**:
+   - `id`: UUID (Primary Key)
+   - `nama_pengadaan`: CharField(255)
+   - `tipe_dokumen`: CharField (`tender`, `rks`, `kontrak`, `amendemen`)
+   - `hps_total`: DecimalField
+   - `resiko_csms`: CharField (`Tinggi`, `Sedang`, `Rendah`)
+   - `current_step`: IntegerField (1: BoQ, 2: Ekstraksi, 3: Verifikasi, 4: Terbit)
+   - `created_at`, `updated_at`: DateTimeField
+
+2. **`DocumentDraft`**:
+   - `project`: ForeignKey(`TenderProject`)
+   - `versi`: CharField (`v1.0`, `v2.0`)
+   - `file_docx`: FileField(upload_to='generated_docs/')
+   - `content_json`: JSONField (Struktur 40 pasal IKPP & matriks)
+   - `skor_kepatuhan_stk`: IntegerField (0 - 100)
+   - `is_active`: BooleanField
+
+3. **`ChatMessage`**:
+   - `project`: ForeignKey(`TenderProject`)
+   - `role`: CharField (`user`, `assistant`, `system`)
+   - `content`: TextField
+   - `tool_calls`: JSONField (menyimpan jejak revisi klausul otomatis)
+   - `created_at`: DateTimeField
+
+4. **`KnowledgeReference`**:
+   - `kode_pedoman`: CharField (`A03-001/PNG200000/2024-S9`)
+   - `nama_aturan`: CharField
+   - `qdrant_point_id`: CharField
+
 ### 4.1 Entity Relationship Diagram (ERD)
 
 ```mermaid
