@@ -54,7 +54,8 @@ class CanvasController {
     const btn = document.getElementById('btnFullscreen');
     if (workspace) workspace.classList.toggle('canvas-fullscreen', isFullscreen);
     if (btn) {
-      btn.innerHTML = isFullscreen ? '<span class="tool-icon">⛶</span> Keluar Penuh' : '<span class="tool-icon">⛶</span> Penuh';
+      btn.innerHTML = isFullscreen ? '<span class="tool-icon">🗗</span>' : '<span class="tool-icon">⛶</span>';
+      btn.title = isFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh (Maximize)';
     }
   }
 
@@ -100,12 +101,10 @@ class CanvasController {
     navigator.clipboard.writeText(text).then(() => {
       if (btn) {
         const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<span class="tool-icon">✓</span> Tersalin!';
-        btn.style.color = '#10B981';
+        btn.innerHTML = '<span class="tool-icon" style="color:#10B981">✓</span>';
         setTimeout(() => {
           btn.innerHTML = originalHtml;
-          btn.style.color = '';
-        }, 2000);
+        }, 1800);
       }
     }).catch(err => {
       console.warn("Clipboard write failed:", err);
@@ -218,17 +217,18 @@ class CanvasController {
     const checklistTabBtn = document.querySelector('.tab-pill[data-tab="checklistTab"]');
 
     if (mode === 'kb') {
-      if (previewTabBtn) previewTabBtn.innerText = "🗄️ Collections Qdrant";
+      if (previewTabBtn) previewTabBtn.innerText = "🗄️ Collections";
       if (matrixTabBtn) matrixTabBtn.style.display = "none";
       if (checklistTabBtn) checklistTabBtn.style.display = "none";
     } else {
-      if (previewTabBtn) previewTabBtn.innerText = "📄 Pratinjau Dokumen (.DOCX)";
+      if (previewTabBtn) previewTabBtn.innerText = "📄 Dokumen";
       if (matrixTabBtn) {
         matrixTabBtn.style.display = "flex";
-        matrixTabBtn.innerText = mode === 'tender' ? "📊 Matriks HPS & TKDN" : (mode === 'amendment' ? "📊 Tabel Komparasi" : "📊 Rincian Teknis");
+        matrixTabBtn.innerText = mode === 'tender' ? "📊 Matriks HPS" : (mode === 'amendment' ? "📊 Komparasi" : "📊 Matriks");
       }
       if (checklistTabBtn) {
         checklistTabBtn.style.display = "flex";
+        checklistTabBtn.innerText = "✅ STK (86)";
       }
     }
 

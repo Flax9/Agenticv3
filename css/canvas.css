@@ -13,36 +13,40 @@
 
 /* 1. Canvas Top Bar & Claude-Style Artifact Header */
 .canvas-topbar {
-  min-height: 54px;
+  height: 50px;
+  min-height: 50px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 18px;
+  padding: 0 16px;
   flex-shrink: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   z-index: 10;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: nowrap;
 }
 
 .canvas-header-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 200px;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 .doc-icon-badge {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-sm);
   background: #EBF3FA;
   color: var(--pertamina-blue);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
   border: 1px solid #D0E1F4;
   flex-shrink: 0;
 }
@@ -50,25 +54,28 @@
 .doc-title-text-wrap {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .doc-active-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--pertamina-navy);
-  line-height: 1.3;
-  max-width: 240px;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 140px;
 }
 
 .doc-sync-status {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .sync-dot {
@@ -91,14 +98,15 @@
   display: flex;
   background: #F1F5F9;
   border-radius: var(--radius-md);
-  padding: 3px;
+  padding: 2px;
   gap: 2px;
   border: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .tab-pill {
-  padding: 5px 12px;
-  font-size: 11.5px;
+  padding: 5px 10px;
+  font-size: 11px;
   font-weight: 600;
   border: none;
   background: transparent;
@@ -107,7 +115,7 @@
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   transition: var(--transition-fast);
   white-space: nowrap;
 }
@@ -127,14 +135,15 @@
 .canvas-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .btn-tool-action {
   background: white;
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  padding: 6px 11px;
+  padding: 5px 10px;
   border-radius: var(--radius-sm);
   font-size: 11.5px;
   font-weight: 600;
@@ -143,6 +152,16 @@
   align-items: center;
   gap: 5px;
   transition: var(--transition-fast);
+}
+
+.btn-tool-action.icon-only {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
 }
 
 .btn-tool-action:hover {
@@ -156,8 +175,8 @@
 }
 
 .btn-tool-icon-close {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: transparent;
@@ -165,7 +184,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   transition: var(--transition-fast);
 }

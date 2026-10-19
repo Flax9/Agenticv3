@@ -197,28 +197,25 @@
         </div>
 
         <div class="tab-pills">
-          <button class="tab-pill active" data-tab="previewTab" onclick="switchCanvasTab('previewTab', this)">
-            📄 Naskah Dokumen
+          <button class="tab-pill active" data-tab="previewTab" onclick="switchCanvasTab('previewTab', this)" title="Pratinjau Naskah Dokumen">
+            📄 Dokumen
           </button>
-          <button class="tab-pill" data-tab="matrixTab" onclick="switchCanvasTab('matrixTab', this)">
-            📊 Matriks HPS & TKDN
+          <button class="tab-pill" data-tab="matrixTab" onclick="switchCanvasTab('matrixTab', this)" title="Matriks Rincian & HPS">
+            📊 Matriks
           </button>
-          <button class="tab-pill" data-tab="checklistTab" onclick="switchCanvasTab('checklistTab', this)">
-            ✅ Checklist STK (86 Poin)
+          <button class="tab-pill" data-tab="checklistTab" onclick="switchCanvasTab('checklistTab', this)" title="Checklist Kepatuhan STK 86 Poin">
+            ✅ STK (86)
           </button>
         </div>
 
         <div class="canvas-actions">
-          <button class="btn-tool-action" onclick="copyCanvasContent()" id="btnCopyCanvas" title="Salin Isi Naskah ke Clipboard">
-            <span class="tool-icon">📋</span> Salin
+          <button class="btn-tool-action icon-only" onclick="copyCanvasContent()" id="btnCopyCanvas" title="Salin Isi Naskah ke Clipboard">
+            <span class="tool-icon">📋</span>
           </button>
-          <button class="btn-tool-action" onclick="toggleCanvasFullscreen()" id="btnFullscreen" title="Layar Penuh (Maximize)">
-            <span class="tool-icon">⛶</span> Penuh
+          <button class="btn-tool-action icon-only" onclick="toggleCanvasFullscreen()" id="btnFullscreen" title="Layar Penuh (Maximize)">
+            <span class="tool-icon">⛶</span>
           </button>
-          <button class="btn-download-docx" onclick="downloadWord()" title="Unduh File Word Resmi">
-            📥 Unduh .DOCX
-          </button>
-          <button class="btn-tool-icon-close" onclick="toggleCanvasVisibility()" title="Sembunyikan Canvas (Fokus Chat)">
+          <button class="btn-tool-icon-close" onclick="toggleCanvasVisibility()" title="Tutup Review Window">
             ✕
           </button>
         </div>
