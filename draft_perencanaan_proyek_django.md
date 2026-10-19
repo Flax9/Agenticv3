@@ -1,14 +1,14 @@
 # Draft Perencanaan Proyek: Pertamina Procurement AI Copilot & Live Canvas
-**Arsitektur Modern Decoupled: Frontend React (Vite JavaScript) + Backend FastAPI (ASGI) + SQLAlchemy 2.0 + Celery + Nginx Reverse Proxy + CI/CD Docker**
+**Arsitektur Modern Decoupled: Frontend React (Vite JavaScript) + Tailwind CSS v3 + Backend FastAPI (ASGI) + SQLAlchemy 2.0 + Celery + Nginx Reverse Proxy + CI/CD Docker**
 
 ---
 
 ## 1. Ringkasan Eksekutif & Tujuan Proyek
 
-Proyek ini bertujuan mengintegrasikan antarmuka frontend modern berbasis **React + Vite (JavaScript)** dengan arsitektur komponen modular di dalam folder **`komponen/`**, terhubung ke backend **FastAPI (Python 3.11/3.12)** yang berkinerja tinggi (*high-concurrency async*).
+Proyek ini bertujuan mengintegrasikan antarmuka frontend modern berbasis **React + Vite (JavaScript)** dan styling **Tailwind CSS v3** dengan arsitektur komponen modular di dalam folder **`komponen/`**, terhubung ke backend **FastAPI (Python 3.11/3.12)** yang berkinerja tinggi (*high-concurrency async*).
 
 Sistem ini mengadopsi **Opsi A (Nginx Reverse Proxy Decoupled)**, di mana:
-1. **Frontend React (Vite JavaScript)**: Seluruh elemen antarmuka (*Claude-style Live Canvas*, *Progress Drawer*, *Vertical Docked Tab*, *Chat & In-Chat Artifact Cards*, *Tool-calls Accordion*, dan *DocPicker Modal*) dipecah menjadi komponen-komponen independen dan dapat digunakan kembali (*reusable components*) di dalam direktori `frontend/src/komponen/`. Pada mode produksi, Vite mengompilasi bundel statis ke folder `dist/` yang disajikan langsung oleh Nginx dengan latensi < 2 ms.
+1. **Frontend React (Vite JavaScript) & Tailwind CSS v3**: Seluruh elemen antarmuka (*Claude-style Live Canvas*, *Progress Drawer*, *Vertical Docked Tab*, *Chat & In-Chat Artifact Cards*, *Tool-calls Accordion*, dan *DocPicker Modal*) dibangun menggunakan utility-first classes dari **Tailwind CSS v3** (`tailwindcss@^3.4.x`, `postcss`, `autoprefixer`) yang dikonfigurasi dengan *design tokens* resmi PT Pertamina (Navy `#002D62`, Red `#ED1C24`, Green `#009A44`, Blue `#0072BC`, dan palet netral slate). Seluruh kode dipecah menjadi komponen-komponen independen dan dapat digunakan kembali (*reusable components*) di dalam direktori `frontend/src/komponen/`. Pada mode produksi, Vite mengompilasi bundel statis ke folder `dist/` yang disajikan langsung oleh Nginx dengan latensi < 2 ms.
 2. **Backend FastAPI**: Beroperasi sebagai layanan ASGI mandiri di port internal 8000 untuk menangani komputasi AI, validasi Pydantic v2, *token streaming* (Server-Sent Events), koneksi Qdrant Vector DB, serta pembentukan dokumen resmi PT Pertamina Patra Niaga (IKPP Versi 2.0 40 Poin, RKS, Kontrak Definitif, dan Amendemen) yang patuh terhadap Pedoman No. A03-001/PNG200000/2024-S9.
 3. **SQLAlchemy 2.0 (Async) + Alembic**: Menangani persistensi data relasional ke PostgreSQL untuk 8 tabel pengadaan, riwayat chat, dan audit kepatuhan.
 
@@ -63,26 +63,28 @@ pertamina_procurement/
 │   └── nginx/
 │       └── default.conf                   # Reverse proxy, static server dist/, timeout 300s
 │
-├── frontend/                              # [FRONTEND REACT + VITE JAVASCRIPT]
+├── frontend/                              # [FRONTEND REACT + VITE JAVASCRIPT + TAILWIND CSS V3]
 │   ├── index.html                         # Entry point HTML Vite
-│   ├── package.json                       # Dependensi React, Vite, Lucide-React, Axios
+│   ├── package.json                       # Dependensi React, Vite, Tailwind CSS v3, PostCSS, Lucide-React, Axios
 │   ├── vite.config.js                     # Konfigurasi build & proxy dev /api/ -> :8000
+│   ├── tailwind.config.js                 # Konfigurasi Tailwind CSS v3 (Color tokens resmi Pertamina, dark mode, font)
+│   ├── postcss.config.js                  # Konfigurasi PostCSS untuk Tailwind & Autoprefixer
 │   ├── public/                            # Aset publik statis (favicon, logo Pertamina)
 │   └── src/
 │       ├── main.jsx                       # React DOM entry point
-│       ├── App.jsx                        # Root Layout (Split-screen Chat & Live Canvas)
-│       ├── App.css
-│       ├── index.css                      # Global styles & design tokens resmi Pertamina
+│       ├── App.jsx                        # Root Layout (Split-screen Chat & Live Canvas dengan Tailwind)
+│       ├── App.css                        # Styling pelengkap animasi/transisi
+│       ├── index.css                      # Entry Tailwind directives (@tailwind base/components/utilities) & token Pertamina
 │       │
-│       ├── komponen/                      # [FOLDER KOMPONEN MODULAR]
+│       ├── komponen/                      # [FOLDER KOMPONEN MODULAR BERBASIS TAILWIND CSS]
 │       │   ├── Navbar/
 │       │   │   ├── Navbar.jsx             # Topbar, Logo Pertamina, Ganti Dokumen, Step & Unduh
 │       │   │   ├── HamburgerMenu.jsx      # Dropdown menu pengaturan & riwayat pengadaan
-│       │   │   └── Navbar.css
+│       │   │   └── Navbar.css             # (Opsional) custom keyframes bila dibutuhkan
 │       │   │
 │       │   ├── Chat/
-│       │   │   ├── ChatPanel.jsx          # Panel chat kiri (auto 100% saat canvas off)
-│       │   │   ├── ChatBubble.jsx         # Pesan percakapan user & balasan AI
+│       │   │   ├── ChatPanel.jsx          # Panel chat kiri (auto w-full saat canvas off, flex-1 saat active)
+│       │   │   ├── ChatBubble.jsx         # Pesan percakapan user & balasan AI (Tailwind bubble styled)
 │       │   │   ├── ToolCallCard.jsx       # Card interaktif eksekusi tool AI (klausul STK)
 │       │   │   ├── ArtifactCard.jsx       # Card embed preview dokumen di dalam chat
 │       │   │   ├── QuickActionChips.jsx   # Tombol saran prompt cepat (Jaminan, CSMS, HPS)
@@ -164,6 +166,82 @@ pertamina_procurement/
 ├── .env.example
 ├── Dockerfile                             # Multi-stage Docker build untuk Frontend, FastAPI & Celery
 └── docker-compose.yml                     # Orkestrasi 6 kontainer terpadu
+```
+
+### 3.1 Konfigurasi & Design Tokens Tailwind CSS v3 (Resmi Pertamina)
+
+Untuk menjamin konsistensi visual korporat PT Pertamina Patra Niaga dan kecepatan render antarmuka frontend, **Tailwind CSS v3** (`tailwindcss@^3.4.17`) digunakan sebagai styling engine utama. Konfigurasi resmi proyek ditetapkan sebagai berikut:
+
+#### 1. Berkas `frontend/tailwind.config.js`
+```javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        pertamina: {
+          navy: '#002D62',       // Warna primer korporat (Header, tombol utama)
+          'navy-dark': '#001D42', // Background navbar & sidebar hover
+          'navy-light': '#0B4080',
+          red: '#ED1C24',        // Aksen merah Pertamina (Badge resiko tinggi, danger, alert)
+          'red-light': '#FDE8E9',
+          green: '#009A44',      // Aksen hijau Pertamina (Status success, tombol unduh)
+          'green-light': '#E6F5EC',
+          blue: '#0072BC',       // Aksen biru secondary (Active tabs, highlight link)
+          'blue-light': '#E8F1F9',
+          gray: {
+            50: '#F8FAFC',
+            100: '#F1F5F9',
+            200: '#E2E8F0',
+            300: '#CBD5E1',
+            600: '#475569',
+            700: '#334155',
+            800: '#1E293B',
+            900: '#0F172A',
+          }
+        }
+      },
+      fontFamily: {
+        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+      },
+      boxShadow: {
+        'pertamina-sm': '0 1px 3px 0 rgba(0, 45, 98, 0.08)',
+        'pertamina-md': '0 4px 6px -1px rgba(0, 45, 98, 0.12), 0 2px 4px -2px rgba(0, 45, 98, 0.08)',
+        'pertamina-lg': '0 10px 15px -3px rgba(0, 45, 98, 0.15), 0 4px 6px -4px rgba(0, 45, 98, 0.1)',
+      }
+    },
+  },
+  plugins: [],
+}
+```
+
+#### 2. Berkas `frontend/postcss.config.js`
+```javascript
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+```
+
+#### 3. Berkas `frontend/src/index.css`
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-pertamina-gray-50 text-pertamina-gray-900 font-sans antialiased;
+  }
+}
 ```
 
 ---
@@ -483,10 +561,22 @@ erDiagram
 
 ## 5. Tahapan Implementasi (Rencana Kerja 5 Fase)
 
-### Fase 1: Inisialisasi Frontend React (Vite JavaScript) & Setup Backend FastAPI
-- [ ] Inisialisasi proyek React menggunakan Vite (JavaScript) di dalam folder `frontend/`.
+### Fase 1: Inisialisasi Frontend React (Vite JavaScript) + Tailwind CSS v3 & Setup Backend FastAPI
+- [x] Inisialisasi proyek React menggunakan Vite (JavaScript) di dalam folder `frontend/`.
+- [ ] Instalasi dan konfigurasi **Tailwind CSS v3** (`tailwindcss@^3.4.17`, `postcss`, `autoprefixer`).
+- [ ] Buat file `frontend/tailwind.config.js` dengan palet warna resmi korporat Pertamina:
+  - `pertamina-navy`: `#002D62`
+  - `pertamina-navy-dark`: `#001D42`
+  - `pertamina-red`: `#ED1C24`
+  - `pertamina-green`: `#009A44`
+  - `pertamina-blue`: `#0072BC`
+  - `pertamina-blue-light`: `#E8F1F9`
+  - `pertamina-gray-bg`: `#F8FAFC`
+  - `pertamina-border`: `#E2E8F0`
+- [ ] Buat file `frontend/postcss.config.js` untuk integrasi plugin Tailwind CSS dan Autoprefixer.
+- [ ] Konfigurasi `frontend/src/index.css` dengan direktif `@tailwind base; @tailwind components; @tailwind utilities;` serta token variabel styling global.
 - [ ] Buat struktur folder komponen modular di `frontend/src/komponen/` (`Navbar/`, `Chat/`, `Canvas/`, `Common/`).
-- [ ] Migrasikan CSS design system Pertamina (`main.css`, `canvas.css`, `chat.css`) ke dalam styling komponen React.
+- [ ] Migrasikan styling antarmuka Claude-style UI dari `frontend_vanilla/` ke utility classes Tailwind CSS pada setiap komponen modular di `komponen/`.
 - [ ] Konfigurasi `frontend/vite.config.js` untuk development proxy `/api` -> `http://127.0.0.1:8000`.
 - [ ] Siapkan file `requirements.txt` untuk FastAPI (`fastapi`, `uvicorn[standard]`, `pydantic-settings`, `sqlalchemy[asyncio]`, `asyncpg`, `python-docx`, `qdrant-client`).
 - [ ] Buat `backend/app/main.py` dengan CORS middleware aktif dan OpenAPI Swagger di `/docs`.
