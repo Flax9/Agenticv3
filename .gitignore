@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+**/node_modules/
+__pycache__/
+*.pyc
+
+# Production & Build outputs
+dist/
+build/
+output/
+media/uploads/
+media/generated_docs/
+
+# Environment & Secrets
+.env
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
