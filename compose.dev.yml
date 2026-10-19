@@ -1,0 +1,28 @@
+# Layanan pendukung untuk development lokal (backend & frontend tetap dijalankan langsung).
+# Jalankan:  docker compose -f compose.dev.yml up -d
+# Berkas docker-compose.yml untuk produksi menyusul di Fase 5 (masterplan 8.3).
+name: itec-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: itec_dev_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pertamina_db}
+      POSTGRES_USER: ${POSTGRES_USER:-pertamina_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diisi di .env}
+    ports:
+      # Hanya bisa diakses dari laptop ini, tidak dari jaringan
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - itec_dev_pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init-test-db.sql:/docker-entrypoint-initdb.d/10-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  itec_dev_pgdata:

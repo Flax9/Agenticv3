@@ -7,7 +7,7 @@
 
 ## 1. Ringkasan Eksekutif & Tujuan Proyek
 
-Proyek ini bertujuan mengintegrasikan antarmuka frontend modern berbasis **React + Vite (JavaScript)** dan styling **Tailwind CSS v3** dengan arsitektur komponen modular di dalam folder **`komponen/`**, terhubung ke backend **FastAPI (Python 3.11/3.12)** yang berkinerja tinggi (*high-concurrency async*).
+Proyek ini bertujuan mengintegrasikan antarmuka frontend modern berbasis **React + Vite (JavaScript)** dan styling **Tailwind CSS v3** dengan arsitektur komponen modular di dalam folder **`komponen/`**, terhubung ke backend **FastAPI (Python 3.12)** yang berkinerja tinggi (*high-concurrency async*).
 
 Sistem ini mengadopsi **Opsi A (Nginx Reverse Proxy Decoupled)**, di mana:
 1. **Frontend React (Vite JavaScript) & Tailwind CSS v3**: Seluruh elemen antarmuka (*Claude-style Live Canvas*, *Progress Drawer*, *Vertical Docked Tab*, *Chat & In-Chat Artifact Cards*, *Tool-calls Accordion*, dan *DocPicker Modal*) dibangun menggunakan utility-first classes dari **Tailwind CSS v3** (`tailwindcss@^3.4.x`, `postcss`, `autoprefixer`) yang dikonfigurasi dengan *design tokens* resmi PT Pertamina (Navy `#002D62`, Red `#ED1C24`, Green `#009A44`, Blue `#0072BC`, dan palet netral slate). Seluruh kode dipecah menjadi komponen-komponen independen dan dapat digunakan kembali (*reusable components*) di dalam direktori `frontend/src/komponen/`. Pada mode produksi, Vite mengompilasi bundel statis ke folder `dist/` yang dikemas ke dalam image Nginx dan disajikan langsung sebagai berkas statis.
@@ -106,7 +106,8 @@ pertamina_procurement/
 │       │   │   ├── CanvasReview.jsx       # Panel review dokumen kanan (Live Canvas)
 │       │   │   ├── CanvasToolbar.jsx      # Tabs (Dokumen, Matriks CSMS, STK 86) & Icon Tools
 │       │   │   ├── DocumentEditor.jsx     # Editor interaktif klausul / markdown dokumen
-│       │   │   ├── CsmsMatrixView.jsx     # Tampilan visual matriks evaluasi risiko CSMS
+│       │   │   ├── MatrixView.jsx         # Matriks HPS/K&R (tender) & ringkasan nilai (RKS/kontrak/amendemen)
+│       │   │   ├── KnowledgeBaseView.jsx  # Daftar dokumen per collection Qdrant
 │       │   │   ├── StkComplianceView.jsx  # Checklist kepatuhan 86 aturan STK Pertamina
 │       │   │   └── Canvas.css
 │       │   │
@@ -136,8 +137,10 @@ pertamina_procurement/
 │   │   ├── database.py                    # SQLAlchemy Async Engine & session maker
 │   │   │
 │   │   ├── core/
-│   │   │   ├── security.py                # Hash password (argon2/bcrypt), buat & verifikasi JWT
-│   │   │   └── deps.py                    # Dependency get_current_user & require_role(...)
+│   │   │   ├── security.py                # Hash password (argon2), buat & verifikasi JWT
+│   │   │   ├── deps.py                    # Dependency get_current_user & require_role(...)
+│   │   │   ├── rate_limit.py              # Pembatas percobaan login gagal
+│   │   │   └── audit.py                   # Helper pencatatan AuditTrail (kode web, sengaja di luar services/ AI)
 │   │   │
 │   │   ├── models/                        # SQLAlchemy 2.0 ORM Models (9 Tabel)
 │   │   │   ├── __init__.py
@@ -159,22 +162,21 @@ pertamina_procurement/
 │   │   │   ├── tender_routes.py           # /api/extract-tender-metadata, /api/generate-tender, dll
 │   │   │   ├── chat_routes.py             # /api/chat (Streaming SSE token per kata)
 │   │   │   ├── kb_routes.py               # /api/kb/ingest, /api/kb/list
-│   │   │   └── health_routes.py           # /api/health (cek DB & Qdrant)
+│   │   │   ├── uploads.py                 # Validasi berkas unggahan (ekstensi, ukuran, nama)
+│   │   │   └── health_routes.py           # /api/health (status konfigurasi LLM & Qdrant)
 │   │   │
 │   │   └── services/                      # AI & RAG Pipeline (Porting dari Agentic_Rag_Pertamina_camp)
-│   │       ├── summarizer.py              # Ekstraksi PDF acuan & BoQ Excel
-│   │       ├── vector_store.py            # Wrapper Qdrant Vector Store
-│   │       ├── tender_generator.py        # Generator 40 Poin IKPP Dokumen Tender
-│   │       ├── rks_generator.py           # Generator RKS & CSMS
-│   │       ├── contract_generator.py      # Generator Kontrak Definitif & Amendemen
-│   │       ├── audit.py                   # Helper pencatatan AuditTrail
+│   │       ├── rag/                       # summarizer (ekstraksi PDF/Excel), vector_store (Qdrant), tools (generator RKS)
+│   │       ├── tender/                    # Generator & exporter Dokumen Tender 40 Poin IKPP
+│   │       ├── contract/                  # Generator & exporter Kontrak Definitif & Amendemen
 │   │       └── tasks.py                   # Celery tasks (opsional: export docx berat & housekeeping)
 │   │
 │   ├── alembic/                           # Database Migration Tool (Alembic)
 │   │   ├── env.py
 │   │   └── versions/                      # Berkas riwayat migrasi tabel
 │   ├── alembic.ini
-│   ├── requirements.txt                   # fastapi, uvicorn, sqlalchemy, qdrant-client, python-docx, pyjwt, pwdlib
+│   ├── assets/                            # Logo & doc_config.json untuk exporter .docx
+│   ├── pyproject.toml + uv.lock           # Dependensi dikelola dengan uv (Python 3.12)
 │   └── tests/                             # Pytest automated test suites
 │       ├── test_auth.py
 │       ├── test_api_tender.py
@@ -647,26 +649,28 @@ Penegakan dilakukan di backend melalui dependency `require_role(...)` pada setia
 - [x] Buat file `frontend/tailwind.config.js` dengan palet warna resmi korporat Pertamina (lihat 3.1).
 - [x] Buat file `frontend/postcss.config.js` untuk integrasi plugin Tailwind CSS dan Autoprefixer.
 - [x] Konfigurasi `frontend/src/index.css` dengan direktif `@tailwind base; @tailwind components; @tailwind utilities;`.
-- [ ] Bersihkan sisa template Vite (`App.css`, `assets/hero.png`, `assets/react.svg`, `assets/vite.svg`, `public/icons.svg`), ubah `<title>` dan `lang="id"` di `index.html`, serta muat font Plus Jakarta Sans & JetBrains Mono.
-- [ ] Konfigurasi `frontend/vite.config.js` untuk development proxy `/api` -> `http://127.0.0.1:8000` (lihat 3.1 butir 4).
-- [ ] Buat struktur folder komponen modular di `frontend/src/komponen/` (`Auth/`, `Navbar/`, `Chat/`, `Canvas/`, `Common/`).
-- [ ] Migrasikan antarmuka Claude-style UI dari `frontend_vanilla/` ke komponen React + utility classes Tailwind, sambil memperbaiki bug prototipe yang tercatat di `draft_perencanaan_frontend.md` Bagian 7.
-- [ ] Pindahkan `Agentic_Rag_Pertamina_camp/api.py` ke `backend/app/` sebagai titik awal, lalu siapkan `requirements.txt` (`fastapi`, `uvicorn[standard]`, `pydantic-settings`, `sqlalchemy[asyncio]`, `asyncpg`, `alembic`, `python-docx`, `qdrant-client`, `pyjwt`, `pwdlib[argon2]`, `python-multipart`).
-- [ ] Buat `backend/app/main.py` dengan `CORSMiddleware` (origin whitelist dari `.env`, **bukan** `*`) dan OpenAPI Swagger di `/docs` (hanya aktif bila `DEBUG=True`).
-- [ ] **Milestone Fase 1:** alur Upload BoQ → `/api/extract-tender-metadata` → tampil di Canvas React berjalan nyata (tanpa data demo).
+- [x] Bersihkan sisa template Vite (`App.css`, `assets/hero.png`, `assets/react.svg`, `assets/vite.svg`, `public/icons.svg`), ubah `<title>` dan `lang="id"` di `index.html`, serta muat font Plus Jakarta Sans & JetBrains Mono.
+- [x] Konfigurasi `frontend/vite.config.js` untuk development proxy `/api` -> `http://127.0.0.1:8000` (lihat 3.1 butir 4).
+- [x] Buat struktur folder komponen modular di `frontend/src/komponen/` (`Navbar/`, `Chat/`, `Canvas/`, `Common/`; `Auth/` menyusul di Fase 2).
+- [x] Migrasikan antarmuka Claude-style UI dari `frontend_vanilla/` ke komponen React + utility classes Tailwind, sambil memperbaiki bug prototipe yang tercatat di `draft_perencanaan_frontend.md` Bagian 7.
+- [x] Pindahkan `Agentic_Rag_Pertamina_camp/api.py` ke `backend/app/api/` (router per domain) dan kelola dependensi dengan `uv` (`backend/pyproject.toml`, versi disamakan dengan `uv.lock` camp). Paket database & auth (`sqlalchemy[asyncio]`, `asyncpg`, `alembic`, `pyjwt`, `pwdlib[argon2]`) ditambahkan di Fase 2.
+- [x] Buat `backend/app/main.py` dengan `CORSMiddleware` (origin whitelist dari `.env`, **bukan** `*`) dan OpenAPI Swagger di `/docs` (hanya aktif bila `DEBUG=True`).
+- [x] **Milestone Fase 1:** alur Upload BoQ → `/api/extract-tender-metadata` → kartu verifikasi → Canvas React berjalan nyata (tanpa data demo). Alur web terverifikasi 19 Okt 2026 dengan PDF BoQ nyata via proxy Vite; akurasi ekstraksi menunggu perbaikan bug LLM oleh tim AI (`pertanyaan penanggung jawab ai.md` C1).
 
 ### Fase 2: Database SQLAlchemy 2.0, Alembic & Autentikasi
-- [ ] Definisikan 9 model tabel deklaratif di `backend/app/models/` beserta enum & `CHECK` constraint (lihat 4.3).
-- [ ] Konfigurasi koneksi async database di `backend/app/database.py`.
-- [ ] Inisialisasi Alembic (`alembic init -t async alembic`) dan buat migrasi awal (`alembic revision --autogenerate -m "initial_procurement_tables"`). Periksa manual hasil autogenerate (CHECK constraint & partial index sering tidak terdeteksi otomatis).
-- [ ] Jalankan migrasi ke PostgreSQL lokal / Docker (`alembic upgrade head`).
-- [ ] Implementasikan `core/security.py` (hash argon2, JWT access token 30 menit + refresh token) dan route `/api/auth/login`, `/api/auth/me`, `/api/auth/refresh`.
-- [ ] Terapkan `require_role(...)` pada seluruh route sesuai matriks 4.4, serta pencatatan `AuditTrail` untuk aksi penting.
-- [ ] Buat skrip seed: akun `ADMIN` awal (password dari `.env`) dan 86 aturan STK.
-- [ ] Frontend: `LoginPage`, `ProtectedRoute`, dan `api.js` yang menyisipkan header `Authorization: Bearer <token>`.
+- [x] Definisikan 9 model tabel deklaratif di `backend/app/models/` beserta enum & `CHECK` constraint (lihat 4.3).
+- [x] Konfigurasi koneksi async database di `backend/app/database.py`. PostgreSQL development berjalan di Docker (`compose.dev.yml`, hanya terbuka di `127.0.0.1:5432`).
+- [x] Inisialisasi Alembic (`alembic init -t async alembic`) dan buat migrasi awal (`alembic revision --autogenerate -m "initial_procurement_tables"`). Hasil review manual: CHECK constraint enum ganda dirapikan menjadi satu per kolom (`ck_<tabel>_<enum>`); `alembic check` bersih.
+- [x] Jalankan migrasi ke PostgreSQL lokal / Docker (`alembic upgrade head`).
+- [x] Implementasikan `core/security.py` (hash argon2, JWT access token 30 menit + refresh token) dan route `/api/auth/login`, `/api/auth/me`, `/api/auth/refresh`, `/api/auth/logout`, plus pembatas percobaan login (`core/rate_limit.py`, in-memory; pindah ke Redis bila multi-worker).
+- [x] Terapkan `require_role(...)` pada seluruh route sesuai matriks 4.4, serta pencatatan `AuditTrail` untuk aksi penting (login, login gagal, ekstraksi, generate .docx, ingest/hapus KB) lewat `core/audit.py`.
+- [x] Buat skrip seed `app/scripts/seed.py`: akun `ADMIN` awal (password dari `.env`), tambah akun per peran, dan impor katalog STK dari berkas JSON.
+- [ ] Isi data 86 aturan STK (`uv run python -m app.scripts.seed stk <berkas.json>`): menunggu sumber data resmi katalog STK.
+- [x] Frontend: `LoginPage`, `ProtectedRoute`, dan `api.js` yang menyisipkan header `Authorization: Bearer <token>` (access token hanya di memori, refresh lewat cookie HttpOnly, retry otomatis sekali saat 401), serta tombol yang disembunyikan sesuai peran (`services/permissions.js`).
 
 ### Fase 3: Integrasi Modul AI RAG ke Endpoint FastAPI & UI React
-- [ ] Pindahkan logic dari `Agentic_Rag_Pertamina_camp` (`RAG/`, `tender/`, `contract/`) ke `backend/app/services/`.
+- [x] Pindahkan logic dari `Agentic_Rag_Pertamina_camp` (`RAG/`, `tender/`, `contract/`) ke `backend/app/services/` (disalin; import ditulis ulang ke `app.services.*`).
+- [ ] Koordinasi dengan tim AI: generator mengembalikan draf secara langsung (bukan lewat variabel global modul) agar lock sementara di `tender_routes.py` bisa dihapus (`pertanyaan penanggung jawab ai.md` C4).
 - [ ] Implementasikan router endpoint asinkron di `backend/app/api/` (seluruhnya membutuhkan login):
   - `POST /api/extract-tender-metadata` (Ekstraksi BoQ Excel/PDF & RKS PDF acuan; field `file_boq` dan `file_rks` dikirim sesuai jenis berkas).
   - `POST /api/generate-tender` (Export 40 Poin IKPP .docx).
@@ -811,14 +815,15 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
       - name: Install Dependencies
-        run: |
-          pip install -r backend/requirements.txt
-          pip install pytest pytest-asyncio httpx ruff
-      - run: ruff check backend
-      - run: pytest backend/tests/
+        working-directory: backend
+        run: uv sync --frozen
+      - run: uv run ruff check .
+        working-directory: backend
+      - run: uv run pytest
+        working-directory: backend
 ```
 
 #### `.github/workflows/deploy.yml`
@@ -894,7 +899,7 @@ jobs:
 | Layanan (Service) | Image | Port Eksternal | Port Internal | Status | Peran & Tanggung Jawab |
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | **`nginx`** | Custom (`frontend/Dockerfile`, basis `nginx:1.27-alpine`) | `80`, `443` | `80`, `443` | Inti | Reverse proxy + TLS, menyajikan build React (`dist/` di dalam image), buffer upload 100MB, timeout AI 300s. |
-| **`web`** | Custom (`backend/Dockerfile`, Python 3.11) | - | `8000` | Inti | FastAPI ASGI application (`uvicorn`), REST API + SSE. |
+| **`web`** | Custom (`backend/Dockerfile`, Python 3.12) | - | `8000` | Inti | FastAPI ASGI application (`uvicorn`), REST API + SSE. |
 | **`db`** | `postgres:16-alpine` | - | `5432` | Inti | PostgreSQL untuk menyimpan pengguna, proyek, klausul, dan audit trail. |
 | **`qdrant`** | `qdrant/qdrant:v1.12.4` | - | `6333` | Inti | Vector Database penyimpanan embeddings 86 Aturan Pedoman Pengadaan STK. Versi dikunci, jangan `latest`. |
 | **`redis`** | `redis:7-alpine` | - | `6379` | Opsional (profil `worker`) | Message broker untuk antrean tugas Celery. |
@@ -906,39 +911,28 @@ jobs:
 ### 8.2 Spesifikasi Dockerfile
 
 #### `backend/Dockerfile` (FastAPI + Celery)
+Dependensi dipasang dari `pyproject.toml` + `uv.lock` (sama persis dengan lingkungan development).
 ```dockerfile
-# Stage 1: Build Python wheels
-FROM python:3.11-slim AS backend-builder
+# Stage 1: Pasang dependensi dengan uv ke virtualenv /app/.venv
+FROM python:3.12-slim AS backend-builder
+COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /usr/local/bin/uv
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+ENV UV_COMPILE_BYTECODE=1     UV_LINK_MODE=copy
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 # Stage 2: Final Production Runtime Image
-FROM python:3.11-slim
+FROM python:3.12-slim
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1     PATH="/app/.venv/bin:$PATH"
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends     libpq5     curl     && rm -rf /var/lib/apt/lists/*
 
 # Akun pengguna non-root demi standar keamanan BUMN
 RUN groupadd -r pertamina && useradd -r -g pertamina pertamina
 
-COPY --from=backend-builder /app/wheels /wheels
-RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
-
+COPY --from=backend-builder /app/.venv /app/.venv
 COPY . .
 RUN mkdir -p /app/media /app/output && chown -R pertamina:pertamina /app
 
@@ -950,7 +944,7 @@ HEALTHCHECK --interval=30s --timeout=5s CMD curl -fs http://localhost:8000/api/h
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--proxy-headers", "--forwarded-allow-ips", "*"]
 ```
 
-> Catatan: `pip wheel` dijalankan **tanpa** `--no-deps` agar dependensi turunan ikut dibangun; dengan `--no-deps` image akhir akan kekurangan paket.
+> Catatan: versi image `ghcr.io/astral-sh/uv` sebaiknya disamakan dengan versi uv yang dipakai saat membuat `uv.lock`, dan tambahkan `.dockerignore` berisi `.venv/`, `__pycache__/`, dan `.pytest_cache/` agar virtualenv lokal tidak ikut tersalin.
 
 #### `frontend/Dockerfile` (Build React → Nginx)
 Dibangun dengan *context* root repo agar konfigurasi `deploy/nginx/default.conf` ikut terbawa.
@@ -1230,7 +1224,7 @@ docker compose logs -f web
      POSTGRES_USER=pertamina_user
      POSTGRES_PASSWORD=ganti_dengan_password_kuat
      DATABASE_URL=postgresql+asyncpg://pertamina_user:ganti_dengan_password_kuat@db:5432/pertamina_db
-     QDRANT_URL=http://qdrant:6333
+     QDRANT_CLUSTER_ENDPOINT=http://qdrant:6333
      QDRANT_API_KEY=ganti_dengan_api_key_acak
      OPENROUTER_API_KEY=sk-or-v1-placeholder
      LLM_PROVIDER=openrouter

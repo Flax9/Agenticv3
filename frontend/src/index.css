@@ -3,19 +3,61 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    box-sizing: border-box;
-  }
-  
   html, body, #root {
-    margin: 0;
-    padding: 0;
     height: 100%;
     width: 100%;
     overflow: hidden;
   }
 
   body {
-    @apply bg-slate-50 text-slate-800 font-sans antialiased;
+    @apply bg-pertamina-gray-100 text-pertamina-gray-900 font-sans text-sm antialiased;
+  }
+
+  code {
+    @apply font-mono text-[0.92em] bg-pertamina-gray-100 rounded px-1;
+  }
+}
+
+@layer components {
+  /* Tabel naskah resmi (dipakai di semua template dokumen canvas) */
+  .doc-table {
+    @apply w-full border-collapse text-xs mb-5;
+  }
+  .doc-table th,
+  .doc-table td {
+    @apply border border-pertamina-gray-300 px-3 py-2 text-left align-top;
+  }
+  .doc-table th {
+    @apply bg-[#D9E2F3] text-pertamina-navy font-bold;
+  }
+  .doc-table tbody tr:nth-child(even) td {
+    @apply bg-pertamina-gray-50;
+  }
+
+  .doc-section-title {
+    @apply text-[13px] font-extrabold bg-pertamina-navy text-white px-3.5 py-2 mt-5 mb-2.5 rounded-md uppercase tracking-wide;
+  }
+
+  /* Penanda sel yang baru diperbarui lewat chat */
+  .highlight-change {
+    @apply relative !bg-yellow-200 transition-colors duration-1000;
+  }
+  .highlight-change::after {
+    content: "Diperbarui via Chat";
+    @apply absolute right-2 top-1.5 text-[9px] bg-yellow-600 text-white px-1.5 rounded-full font-bold shadow-sm;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

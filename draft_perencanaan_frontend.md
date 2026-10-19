@@ -133,7 +133,7 @@ Token resmi **mengikuti `frontend/tailwind.config.js`** (masterplan 3.1). Nilai 
 | `workflowStepper`, `renderStepper()` | `Chat/WorkflowStepper.jsx` (tambahan) | Langkah per mode dari `modeMeta` |
 | Tab pill `previewTab/matrixTab/checklistTab` | `Canvas/CanvasToolbar.jsx` | Tab aktif disimpan di store |
 | `getTenderTemplate()`, `getRKSTemplate()`, dll. | `Canvas/DocumentEditor.jsx` | Template jadi komponen JSX per jenis dokumen; data dari store/API |
-| Matriks HPS, K&R, TKDN | `Canvas/CsmsMatrixView.jsx` | Format Rupiah via `Intl.NumberFormat('id-ID')` |
+| Matriks HPS, K&R, TKDN | `Canvas/MatrixView.jsx` | Format Rupiah via `Intl.NumberFormat('id-ID')` |
 | Checklist 86 STK | `Canvas/StkComplianceView.jsx` | Data dari tabel `procurement_stk_rule` |
 | Vertical docked restore tab | `Common/VerticalRestoreTab.jsx` | – |
 | Progress drawer (`renderDrawer()`) | `Common/ProgressDrawer.jsx` | – |
@@ -172,20 +172,20 @@ Roadmap ini merupakan rincian sisi UI dari Fase 1–4 masterplan.
 
 ### Tahap B: Fondasi React (masterplan Fase 1)
 * [x] Scaffold Vite + React + Tailwind CSS v3 + token Pertamina
-* [ ] Bersihkan template Vite, set `<title>`, `lang="id"`, muat font
-* [ ] Proxy `/api` di `vite.config.js`
-* [ ] Store global (`useAppStore`) + layout split-view responsif di `App.jsx`
+* [x] Bersihkan template Vite, set `<title>`, `lang="id"`, muat font
+* [x] Proxy `/api` di `vite.config.js`
+* [x] Store global (`useAppStore`) + layout split-view responsif di `App.jsx`
 
 ### Tahap C: Porting Komponen (masterplan Fase 1 & 3)
-* [ ] Navbar, HamburgerMenu, DocPickerModal
-* [ ] ChatPanel, ChatBubble, ChatInput (perbaiki bug #1, #2, #4), QuickActionChips, ToolCallCard, ArtifactCard
-* [ ] CanvasReview, CanvasToolbar, DocumentEditor, CsmsMatrixView, StkComplianceView
-* [ ] ProgressDrawer, VerticalRestoreTab, ConfirmDialog, Toast
+* [x] Navbar, HamburgerMenu, DocPickerModal
+* [x] ChatPanel, ChatBubble, ChatInput (perbaiki bug #1, #2, #4), QuickActionChips, ToolCallCard, ArtifactCard, ExtractionCard
+* [x] CanvasReview, CanvasToolbar, DocumentEditor (pratinjau; edit per klausul menyusul), MatrixView, StkComplianceView, KnowledgeBaseView
+* [x] ProgressDrawer, VerticalRestoreTab, ConfirmDialog, Toast
 
 ### Tahap D: Integrasi Data & API (masterplan Fase 2–4)
 * [ ] LoginPage + ProtectedRoute + penyisipan token di `api.js`
-* [ ] Upload & ekstraksi nyata → micro-card verifikasi → terapkan ke canvas
-* [ ] Fitur *Real-time Highlighting* saat ada perubahan nilai dari percakapan
+* [x] Upload & ekstraksi nyata → micro-card verifikasi → terapkan ke canvas
+* [x] Fitur *Real-time Highlighting* saat ada perubahan nilai dari percakapan (balasan chat masih simulasi sampai `/api/chat/stream` tersedia)
 * [ ] Streaming balasan AI (SSE) dengan indikator mengetik
 * [ ] Unduh `.docx` dari endpoint generate
 

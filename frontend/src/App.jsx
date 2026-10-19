@@ -1,122 +1,65 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect } from 'react'
+import {
+  CanvasReview,
+  ChatPanel,
+  ConfirmDialog,
+  DocPickerModal,
+  Navbar,
+  ProgressDrawer,
+  ToastStack,
+  VerticalRestoreTab,
+} from './komponen'
+import { checkHealth } from './services/api'
+import { useAppStore } from './services/useAppStore'
 
-function App() {
-  const [count, setCount] = useState(0)
+const HEALTH_INTERVAL_MS = 30000
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+function useBackendHealth() {
+  const setBackendStatus = useAppStore((s) => s.setBackendStatus)
+  useEffect(() => {
+    let cancelled = false
+    const probe = async () => {
+      const health = await checkHealth()
+      if (!cancelled) setBackendStatus(health ? 'online' : 'offline')
+    }
+    probe()
+    const timer = setInterval(probe, HEALTH_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [setBackendStatus])
 }
 
-export default App
+export default function App() {
+  const isCanvasVisible = useAppStore((s) => s.isCanvasVisible)
+  const isCanvasFullscreen = useAppStore((s) => s.isCanvasFullscreen)
+  useBackendHealth()
+
+  const chatHidden = isCanvasVisible && isCanvasFullscreen
+
+  // ≥1280px: split-view berdampingan. <1280px: canvas tampil sebagai overlay di atas chat.
+  const canvasClass = isCanvasFullscreen
+    ? 'absolute inset-0 z-20 w-full'
+    : 'absolute inset-y-0 right-0 z-20 w-full shadow-[-8px_0_30px_rgba(0,45,98,0.18)] md:w-[85%] xl:static xl:z-auto xl:w-[56%] xl:shadow-none'
+
+  const chatClass = isCanvasVisible
+    ? 'w-full xl:w-[44%] xl:min-w-[480px] xl:border-r xl:border-pertamina-gray-200'
+    : 'w-full [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-[1100px]'
+
+  return (
+    <div className="flex h-full flex-col">
+      <Navbar />
+      <main className="relative flex flex-1 overflow-hidden">
+        {!chatHidden && <ChatPanel className={chatClass} />}
+        {isCanvasVisible && <CanvasReview className={canvasClass} />}
+      </main>
+
+      <VerticalRestoreTab />
+      <ProgressDrawer />
+      <DocPickerModal />
+      <ConfirmDialog />
+      <ToastStack />
+    </div>
+  )
+}

@@ -3,6 +3,9 @@ node_modules/
 **/node_modules/
 __pycache__/
 *.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
 
 # Production & Build outputs
 dist/
@@ -13,7 +16,9 @@ media/generated_docs/
 
 # Environment & Secrets
 .env
+.env.local
 *.local
+deploy/certs/
 
 # Logs
 *.log
