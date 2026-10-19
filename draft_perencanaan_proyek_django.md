@@ -1,5 +1,5 @@
 # Draft Perencanaan Proyek: Pertamina Procurement AI Copilot & Live Canvas
-**Arsitektur Modern Django Monolith (Template & Static) + ASGI + Celery Worker + Nginx**
+**Arsitektur Modern Django Monolith (Template & Static) + ASGI + Celery Worker + Nginx + CI/CD Pipeline**
 
 ---
 
@@ -48,6 +48,11 @@ graph TD
 
 ```text
 pertamina_procurement/
+│
+├── .github/                               # [CI/CD] Otomasi Pipeline
+│   └── workflows/
+│       ├── ci.yml                         # Uji otomatis (linter, unit test, build test)
+│       └── deploy.yml                     # Deploy otomatis ke server produksi via SSH
 │
 ├── manage.py                              # Entrypoint Django
 ├── requirements.txt                       # Dependensi Python
@@ -170,13 +175,14 @@ pertamina_procurement/
 - [ ] Hubungkan indikator progres frontend (*Progress Drawer* & *Live Sync Badge*) dengan status task worker.
 - [ ] (Opsional) Implementasikan `StreamingHttpResponse` untuk streaming token jawaban AI per kata.
 
-### Fase 5: Dockerization & Konfigurasi Nginx Siap Deploy
+### Fase 5: Dockerization, Nginx, & Pipeline CI/CD Siap Deploy
 - [ ] Susun `Dockerfile` multi-stage untuk Django ASGI & Celery.
 - [ ] Buat file konfigurasi `nginx.conf`:
   - `client_max_body_size 100M;` (upload BoQ besar aman).
   - `proxy_read_timeout 300s;` (mencegah timeout saat LLM berpikir).
   - `proxy_buffering off;` (mendukung streaming AI instan).
 - [ ] Buat `docker-compose.yml` yang menghubungkan service: `nginx`, `web`, `celery_worker`, `redis`, dan `qdrant`.
+- [ ] Siapkan workflow `.github/workflows/deploy.yml` untuk otomatisasi testing & rilis.
 - [ ] Uji coba skenario *end-to-end* (Upload BoQ -> Ekstraksi AI -> Edit Canvas -> Generate Dokumen -> Unduh .docx).
 
 ---
@@ -189,3 +195,106 @@ pertamina_procurement/
 | **Ekstraksi BoQ Excel memakan waktu lama** | Browser mengalami timeout | Celery worker menangani parsing di background dan mengirimkan sinyal progres ke frontend. |
 | **CSRF Token Blocking pada AJAX Fetch** | Request `POST` ditolak (HTTP 403) | `api.js` dilengkapi helper fungsi ekstraksi cookie CSRF Django secara otomatis. |
 | **Koneksi LLM terputus di tengah jalan** | Dokumen gagal terbentuk utuh | Logika *retry mechanism* (maksimal 3 kali) pada `rag_engine` sebelum melaporkan error ke chat window. |
+
+---
+
+## 7. Strategi CI/CD & Alur Penambahan Fitur Baru
+
+### 7.1 Diagram Siklus CI/CD
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer (Laptop Lokal)
+    participant Git as GitHub Repository
+    participant CI as GitHub Actions (CI Runner)
+    participant Reg as Container Registry (GHCR / Docker Hub)
+    participant Server as Server Deploy (Docker + Nginx)
+    actor User as Pengguna (User Pertamina)
+
+    Dev->>Git: 1. Push Fitur Baru (git push origin main)
+    Git->>CI: 2. Trigger Workflow Otomatis
+    Note over CI: Run Tests & Linter<br/>- Tes API Django<br/>- Tes Ekspor .DOCX<br/>- Build Docker Image Test
+    CI->>Reg: 3. Jika Tes Lolos: Push Image Baru (:latest)
+    CI->>Server: 4. Kirim Sinyal Update (via SSH / Webhook)
+    Note over Server: Server Mengeksekusi:<br/>- docker compose pull<br/>- python manage.py migrate<br/>- python manage.py collectstatic<br/>- docker compose up -d (Rolling Update)
+    Server-->>User: 5. Fitur Baru Langsung Tayang (Tanpa Gangguan / Zero Downtime!)
+```
+
+### 7.2 Siklus Penambahan Fitur Baru (Developer Workflow)
+Setiap penambahan fitur baru (misalnya: penambahan evaluasi otomatis skor CSMS vendor, penyesuaian pasal STK baru, atau pembaruan UI canvas) mengikuti alur terstandarisasi:
+
+1. **Lokal (Branching & Development)**:
+   - Developer membuat branch fitur baru: `git checkout -b feature/nama-fitur`.
+   - Mengubah skema model di `apps/procurement/models.py`, menjalankan `python manage.py makemigrations`.
+   - Menulis/memperbarui komponen UI di `templates/` atau `static/`.
+   - Menjalankan unit test lokal: `python manage.py test`.
+2. **Pull Request & Continuous Integration (CI)**:
+   - Developer mem-push branch ke GitHub dan membuka Pull Request (PR) ke `main`.
+   - GitHub Actions otomatis menjalankan:
+     - **Linting & Code Style**: Memastikan kode memenuhi standar PEP8 / formatting bersih.
+     - **Django Unit Tests**: Memverifikasi model, serializers, dan views API.
+     - **Document Generator Test**: Memastikan fungsi ekspor `.docx` menghasilkan berkas Word yang valid tanpa korupsi XML.
+     - **Docker Build Check**: Memastikan image Docker berhasil di-build tanpa missing dependency.
+   - PR hanya dapat di-merge jika seluruh pengujian berstatus **HIJAU (PASS)**.
+3. **Continuous Deployment (CD) ke Server**:
+   - Setelah branch di-merge ke `main`, GitHub Actions mentrigger proses deployment:
+     - Mem-build image final dengan tag versi rilis (misal `v1.2.0` dan `latest`).
+     - Melakukan koneksi SSH aman ke server staging/production.
+     - Menjalankan rolling update:
+       ```bash
+       docker compose pull web celery_worker
+       docker compose run --rm web python manage.py migrate
+       docker compose run --rm web python manage.py collectstatic --noinput
+       docker compose up -d --no-deps web celery_worker
+       ```
+     - Nginx secara mulus meneruskan request baru ke container versi anyar (*zero-downtime*).
+
+### 7.3 Manajemen Database & Ketahanan Data (Zero Data Loss)
+- **Persistensi Data**: Database (PostgreSQL / SQLite) dan folder berkas upload (`media/`) disimpan pada **Docker Volume** di disk fisik server, terisolasi dari container aplikasi. Container dapat di-rebuild berulang kali tanpa risiko kehilangan berkas pengadaan atau riwayat chat.
+- **Migrasi Non-Destruktif**: Migrasi schema (`manage.py migrate`) menerapkan penambahan kolom/tabel secara inkremental tanpa menghapus data yang sudah ada.
+
+### 7.4 Spesifikasi Konfigurasi GitHub Actions (`.github/workflows/deploy.yml`)
+```yaml
+name: CI/CD Pertamina Copilot
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    name: Run Automated Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+      - name: Run Django Tests
+        run: |
+          python manage.py test
+
+  deploy:
+    name: Deploy to Server
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /opt/pertamina-procurement
+            git pull origin main
+            docker compose build
+            docker compose run --rm web python manage.py migrate
+            docker compose run --rm web python manage.py collectstatic --noinput
+            docker compose up -d
+```
