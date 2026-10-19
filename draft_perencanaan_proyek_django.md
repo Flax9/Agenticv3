@@ -1,44 +1,49 @@
 # Draft Perencanaan Proyek: Pertamina Procurement AI Copilot & Live Canvas
-**Arsitektur Modern Django Monolith (Template & Static) + ASGI + Celery Worker + Nginx + CI/CD Pipeline**
+**Arsitektur Modern Decoupled: Frontend agenticv3 + Backend FastAPI (ASGI) + SQLAlchemy 2.0 + Celery + Nginx Reverse Proxy + CI/CD Docker**
 
 ---
 
 ## 1. Ringkasan Eksekutif & Tujuan Proyek
 
-Proyek ini bertujuan mengintegrasikan antarmuka frontend modern **`agenticv3`** (berbasis *Claude-style Live Canvas*, *Progress Drawer*, dan *Vertical Docked Tab*) dengan backend **Django 5.x** modern. Sistem ini menggabungkan mesin RAG dan generator dokumen pengadaan dari `Agentic_Rag_Pertamina_camp` untuk menghasilkan dokumen pengadaan resmi PT Pertamina Patra Niaga (IKPP Versi 2.0 40 Poin, RKS, Kontrak Definitif, dan Amendemen) yang patuh terhadap Pedoman No. A03-001/PNG200000/2024-S9.
+Proyek ini bertujuan mengintegrasikan antarmuka frontend modern **`agenticv3`** (berbasis *Claude-style Live Canvas*, *Progress Drawer*, dan *Vertical Docked Tab*) dengan backend **FastAPI (Python 3.11/3.12)** yang berkinerja tinggi (*high-concurrency async*). 
+
+Sistem ini mengadopsi **Opsi A (Nginx Reverse Proxy Decoupled)**, di mana:
+1. **Nginx** menyajikan berkas antarmuka frontend `agenticv3` (HTML5, Vanilla CSS, Vanilla JS) secara langsung ke pengguna dengan latensi ultra-rendah (< 2 ms) melalui *caching* dan Linux `sendfile`.
+2. **FastAPI** beroperasi secara terdedikasi sebagai backend ASGI di port internal 8000 untuk menangani komputasi AI, validasi Pydantic v2, *token streaming* (Server-Sent Events), koneksi Qdrant Vector DB, serta pembentukan dokumen resmi PT Pertamina Patra Niaga (IKPP Versi 2.0 40 Poin, RKS, Kontrak Definitif, dan Amendemen) yang patuh terhadap Pedoman No. A03-001/PNG200000/2024-S9.
+3. **SQLAlchemy 2.0 (Async) + Alembic** menangani persistensi data relasional ke PostgreSQL untuk 8 tabel pengadaan, riwayat chat, dan audit kepatuhan.
 
 ---
 
-## 2. Arsitektur Sistem Terpadu
+## 2. Arsitektur Sistem Terpadu (Opsi A: Decoupled via Nginx)
 
 ```mermaid
 graph TD
-    Client["Browser Pengguna (agenticv3 UI)"] -->|Port 80/443| Nginx["Nginx Reverse Proxy & Static Cache"]
+    Client["Browser Pengguna (agenticv3 UI)"] -->|Port 80/443| Nginx["Nginx Edge Gateway & Reverse Proxy"]
     
-    subgraph "Edge / Ingress Layer"
-        Nginx -->|Static Assets CSS/JS| StaticDisk["Static Files Cache (sendfile)"]
-        Nginx -->|Proxy Buffering & SSL| ASGI["Django 5 ASGI Server (Uvicorn)"]
+    subgraph "Ingress & Presentation Layer"
+        Nginx -->|GET / & Static Assets| FrontendDisk["Frontend Web Root (agenticv3 HTML/CSS/JS)"]
+        Nginx -->|POST/GET /api/... Buffering & Timeout 300s| FastAPI["FastAPI ASGI Server (Uvicorn)"]
     end
 
-    subgraph "Application Layer (Django 5)"
-        ASGI --> Views["View & API Controllers"]
-        Views --> Auth["Django Auth & Permissions"]
-        Views --> ORM["Django ORM (PostgreSQL / SQLite)"]
-        Views --> TaskQueue["Celery Task Dispatcher"]
+    subgraph "Application & Service Layer (FastAPI)"
+        FastAPI --> Routers["API Route Controllers (Pydantic V2)"]
+        FastAPI --> Auth["Token Validation & Security"]
+        FastAPI --> ORM["SQLAlchemy 2.0 Async ORM"]
+        FastAPI --> TaskDispatch["Celery / Background Dispatcher"]
     end
 
     subgraph "Worker & AI Engine Layer"
-        TaskQueue --> Redis["Redis Message Broker & Cache"]
+        TaskDispatch --> Redis["Redis Message Broker & Cache"]
         Redis --> Celery["Celery Worker"]
-        Celery --> RAG["RAG Engine & Summarizer"]
+        Celery --> RAG["RAG Engine & Summarizer (pypdf/openpyxl)"]
         Celery --> DocxGen["Docx Generator (python-docx)"]
         RAG --> Qdrant["Qdrant Vector DB (86 STK Rules)"]
-        RAG --> LLM["LLM API (OpenRouter Qwen / Internal)"]
+        RAG --> LLM["LLM Engine (OpenRouter Qwen / Internal)"]
     end
 
     subgraph "Storage Layer"
         Celery --> MediaDisk["Media Storage (BoQ Uploads & Generated .DOCX)"]
-        ORM --> DB[(Database)]
+        ORM --> DB[(PostgreSQL 16 Database)]
     end
 ```
 
@@ -51,97 +56,113 @@ pertamina_procurement/
 │
 ├── .github/                               # [CI/CD] Otomasi Pipeline
 │   └── workflows/
-│       ├── ci.yml                         # Uji otomatis (linter, unit test, build test)
-│       └── deploy.yml                     # Deploy otomatis ke server produksi via SSH
-│
-├── manage.py                              # Entrypoint Django
-├── requirements.txt                       # Dependensi Python
-├── .env                                   # Kunci API, Qdrant, Redis, Database
-├── Dockerfile                             # Build image Django + Worker
-├── docker-compose.yml                     # Orkestrasi Nginx, Web, Celery, Redis, Qdrant
+│       ├── ci.yml                         # Uji otomatis (flake8, pytest, docker build test)
+│       └── deploy.yml                     # Deploy otomatis via SSH ke server produksi
 │
 ├── deploy/                                # Konfigurasi Server
-│   ├── nginx/
-│   │   └── default.conf                   # Reverse proxy, buffer upload besar, timeout 300s
-│   └── supervisord.conf                   # (Opsional) jika multi-process dalam satu VM
+│   └── nginx/
+│       └── default.conf                   # Reverse proxy, buffer upload 100MB, timeout 300s
 │
-├── core/                                  # Django Project Root
-│   ├── __init__.py
-│   ├── settings.py                        # ASGI, WhiteNoise (Plan B), Database, Celery
-│   ├── urls.py                            # Master URL Routing
-│   ├── asgi.py                            # ASGI Handler untuk Async & Streaming
-│   └── wsgi.py
-│
-├── templates/                             # Integrasi Frontend agenticv3
-│   └── index.html                         # Template utama (dengan tag {% load static %})
-│
-├── static/                                # Aset Frontend agenticv3
+├── frontend/                              # [DARI AGENTICV3] Static Single Page Interface
+│   ├── index.html                         # Antarmuka utama (Live Canvas, Chat, Drawer)
 │   ├── css/
 │   │   ├── main.css                       # Layout, topbar, restore tab vertikal
-│   │   ├── canvas.css                     # Live Canvas review dokumen
+│   │   ├── canvas.css                     # Review dokumen editor & tabs
 │   │   └── chat.css                       # Chat bubble, cards, drawer
 │   ├── js/
 │   │   ├── state.js                       # Store reactive state
-│   │   ├── api.js                         # Fetch client (dengan CSRF token helper)
-│   │   ├── chat.js                        # Controller interaksi chat & drawer
+│   │   ├── api.js                         # Fetch client ke endpoint FastAPI /api/...
+│   │   ├── chat.js                        # Controller chat & drawer
 │   │   ├── canvas.js                      # Controller editor review dokumen
 │   │   └── app.js                         # Bootstrap aplikasi
-│   └── images/
+│   └── images/                            # Logo Pertamina & icons
 │
-├── apps/                                  # Modul Aplikasi Bisnis
-│   ├── procurement/                       # Modul Manajemen Tender & API Endpoints
-│   │   ├── models.py                      # TenderProject, DocumentDraft, ChatHistory
-│   │   ├── views.py                       # def index(request)
-│   │   ├── api_views.py                   # Async views untuk ekstraksi & ekspor
-│   │   ├── urls.py
-│   │   └── admin.py                       # Panel administrasi dokumen & kepatuhan
+├── backend/                               # [FASTAPI ASGI BACKEND]
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py                        # Entrypoint FastAPI (CORS, routers, lifecycle)
+│   │   ├── config.py                      # Pydantic BaseSettings (.env, Qdrant URL, DB URL)
+│   │   ├── database.py                    # SQLAlchemy Async Engine & session maker
+│   │   │
+│   │   ├── models/                        # SQLAlchemy 2.0 ORM Models (8 Tabel)
+│   │   │   ├── __init__.py
+│   │   │   ├── tender.py                  # TenderProject, DocumentDraft, DocumentClause
+│   │   │   ├── attachment.py              # UploadedAttachment
+│   │   │   ├── chat.py                    # ChatSession, ChatMessage
+│   │   │   └── compliance.py              # StkRule, AuditTrail
+│   │   │
+│   │   ├── schemas/                       # Pydantic V2 Schemas (Request/Response validation)
+│   │   │   ├── tender_schema.py           # Validasi nilai HPS, tanggal, risiko CSMS
+│   │   │   ├── chat_schema.py             # Format pesan & tool-calls
+│   │   │   └── kb_schema.py               # Metadata ingest berkas STK
+│   │   │
+│   │   ├── api/                           # Route Handlers (/api/...)
+│   │   │   ├── __init__.py
+│   │   │   ├── tender_routes.py           # /api/extract-metadata, /api/generate-tender, dll
+│   │   │   ├── chat_routes.py             # /api/chat (Streaming SSE token per kata)
+│   │   │   ├── kb_routes.py               # /api/kb/ingest, /api/kb/list
+│   │   │   └── health_routes.py           # /api/health
+│   │   │
+│   │   └── services/                      # AI & RAG Pipeline (Porting dari Python Camp)
+│   │       ├── summarizer.py              # Ekstraksi PDF acuan & BoQ Excel
+│   │       ├── vector_store.py            # Wrapper Qdrant Vector Store
+│   │       ├── tender_generator.py        # Generator 40 Poin IKPP Dokumen Tender
+│   │       ├── rks_generator.py           # Generator RKS & CSMS
+│   │       ├── contract_generator.py      # Generator Kontrak Definitif & Amendemen
+│   │       └── tasks.py                   # Celery tasks (export docx berat & housekeeping)
 │   │
-│   └── rag_engine/                        # Modul AI & RAG Pipeline (Porting)
-│       ├── config.py                      # Konfigurasi model & koleksi STK
-│       ├── vector_store.py                # Wrapper Qdrant
-│       ├── summarizer.py                  # Parser PDF & BoQ Excel
-│       ├── tender_generator.py            # Generator 40 Poin IKPP
-│       ├── rks_generator.py               # Generator RKS & CSMS
-│       ├── contract_generator.py          # Generator Kontrak & Amendemen
-│       └── tasks.py                       # Celery tasks untuk background generation
+│   ├── alembic/                           # Database Migration Tool (Alembic)
+│   │   ├── env.py
+│   │   └── versions/                      # Berkas riwayat migrasi tabel
+│   ├── alembic.ini
+│   ├── requirements.txt                   # fastapi, uvicorn, sqlalchemy, qdrant-client, docx
+│   └── tests/                             # Pytest automated test suites
+│       ├── test_api_tender.py
+│       └── test_generator.py
 │
-└── media/                                 # Penyimpanan Berkas Dinamis
-    ├── uploads/                           # Berkas BoQ / RKS acuan
-    └── generated_docs/                    # Berkas .docx hasil generate
+├── media/                                 # Penyimpanan Berkas Bersama (Docker Volume)
+│   ├── uploads/                           # Berkas BoQ / RKS acuan yang diunggah
+│   └── generated_docs/                    # Berkas .docx hasil generate siap unduh
+│
+├── output/                                # Folder scratch/temp untuk pemrosesan file
+├── .env                                   # API Keys, Qdrant URL, DB Credentials
+├── .env.example                           # Template variabel lingkungan bebas rahasia
+├── Dockerfile                             # Multi-stage Docker build untuk FastAPI & Celery
+└── docker-compose.yml                     # Orkestrasi 6 kontainer terpadu
 ```
 
 ---
 
-## 4. Desain Database & Kamus Data Lengkap (Database Specifications)
+## 4. Desain Database & Kamus Data Lengkap (SQLAlchemy 2.0 Specifications)
 
 1. **`TenderProject`**:
    - `id`: UUID (Primary Key)
-   - `nama_pengadaan`: CharField(255)
-   - `tipe_dokumen`: CharField (`tender`, `rks`, `kontrak`, `amendemen`)
-   - `hps_total`: DecimalField
-   - `resiko_csms`: CharField (`Tinggi`, `Sedang`, `Rendah`)
-   - `current_step`: IntegerField (1: BoQ, 2: Ekstraksi, 3: Verifikasi, 4: Terbit)
-   - `created_at`, `updated_at`: DateTimeField
+   - `nama_pengadaan`: String(255)
+   - `tipe_dokumen`: String (`tender`, `rks`, `kontrak`, `amendemen`)
+   - `hps_total`: Numeric(18,2)
+   - `resiko_csms`: String (`Tinggi`, `Sedang`, `Rendah`)
+   - `current_step`: Integer (1: BoQ, 2: Ekstraksi, 3: Verifikasi, 4: Terbit)
+   - `created_at`, `updated_at`: DateTime(timezone=True)
 
 2. **`DocumentDraft`**:
-   - `project`: ForeignKey(`TenderProject`)
-   - `versi`: CharField (`v1.0`, `v2.0`)
-   - `file_docx`: FileField(upload_to='generated_docs/')
-   - `content_json`: JSONField (Struktur 40 pasal IKPP & matriks)
-   - `skor_kepatuhan_stk`: IntegerField (0 - 100)
-   - `is_active`: BooleanField
+   - `project_id`: ForeignKey(`TenderProject.id`)
+   - `versi`: String (`v1.0`, `v2.0`)
+   - `file_docx_path`: String(500)
+   - `content_json`: JSONB (Struktur 40 pasal IKPP & matriks)
+   - `skor_kepatuhan_stk`: Integer (0 - 100)
+   - `is_active`: Boolean
 
 3. **`ChatMessage`**:
-   - `project`: ForeignKey(`TenderProject`)
-   - `role`: CharField (`user`, `assistant`, `system`)
-   - `content`: TextField
-   - `tool_calls`: JSONField (menyimpan jejak revisi klausul otomatis)
-   - `created_at`: DateTimeField
+   - `session_id`: ForeignKey(`ChatSession.id`)
+   - `role`: String (`user`, `assistant`, `system`)
+   - `content`: Text
+   - `tool_calls`: JSONB (menyimpan jejak revisi klausul otomatis)
+   - `created_at`: DateTime(timezone=True)
 
 4. **`KnowledgeReference`**:
-   - `kode_pedoman`: CharField (`A03-001/PNG200000/2024-S9`)
-   - `nama_aturan`: CharField
-   - `qdrant_point_id`: CharField
+   - `kode_pedoman`: String (`A03-001/PNG200000/2024-S9`)
+   - `nomor_aturan`: String (`STK-01` s.d. `STK-86`)
+   - `qdrant_point_id`: String(64)
 
 ### 4.1 Entity Relationship Diagram (ERD)
 
@@ -165,7 +186,7 @@ erDiagram
         string email
         string first_name
         string last_name
-        boolean is_staff
+        boolean is_active
     }
 
     PROCUREMENT_TENDER_PROJECT {
@@ -275,18 +296,18 @@ erDiagram
 
 | Nama Kolom | Tipe Data | Constraint | Keterangan & Aturan Bisnis |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | `PRIMARY KEY`, Default: `uuid4()` | Pengenal unik proyek tender |
+| `id` | `UUID` | `PRIMARY KEY`, Default: `gen_random_uuid()` | Pengenal unik proyek tender |
 | `user_id` | `INTEGER` | `FOREIGN KEY` -> `auth_user.id`, `ON DELETE SET NULL`, Nullable | Akun pegawai / PPK pembuat proyek |
 | `no_tender` | `VARCHAR(100)` | `UNIQUE`, `INDEX`, Nullable | Nomor resmi paket tender (misal: `PR-2026-PN-0042`) |
 | `nama_pengadaan` | `VARCHAR(255)` | `NOT NULL` | Nama paket pengadaan barang/jasa |
 | `tipe_dokumen` | `VARCHAR(50)` | `NOT NULL`, Default: `'tender'` | Pilihan: `'tender'` (IKPP 2.0), `'rks'`, `'kontrak'`, `'amendemen'` |
-| `hps_total` | `DECIMAL(18,2)` | `NOT NULL`, Default: `0.00` | Nilai Total Harga Perkiraan Sendiri (Rupiah) |
+| `hps_total` | `NUMERIC(18,2)`| `NOT NULL`, Default: `0.00` | Nilai Total Harga Perkiraan Sendiri (Rupiah) |
 | `resiko_csms` | `VARCHAR(20)` | `NOT NULL`, Default: `'Tinggi'` | Tingkat risiko K3L: `'Ekstrim'`, `'Tinggi'`, `'Sedang'`, `'Rendah'` |
 | `status_tahap` | `VARCHAR(50)` | `NOT NULL`, Default: `'DRAFT'` | Status alur: `'DRAFT'`, `'EKSTRAKSI'`, `'REVIEW_CANVAS'`, `'PUBLISHED'` |
 | `current_step` | `SMALLINT` | `NOT NULL`, Default: `1` | Indikator tahap 1-4 pada Progress Drawer UI |
 | `metadata_ekstraksi` | `JSONB` | Nullable, Default: `{}` | Parameter hasil parsing BoQ/TOR (jangka waktu, jaminan, denda) |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now-add | Waktu inisiasi sesi proyek |
-| `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now | Waktu pembaruan terakhir |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu inisiasi sesi proyek |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu pembaruan terakhir |
 
 ---
 
@@ -296,16 +317,16 @@ erDiagram
 
 | Nama Kolom | Tipe Data | Constraint | Keterangan & Aturan Bisnis |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | `PRIMARY KEY`, Default: `uuid4()` | Pengenal unik draf dokumen |
+| `id` | `UUID` | `PRIMARY KEY`, Default: `gen_random_uuid()` | Pengenal unik draf dokumen |
 | `project_id` | `UUID` | `FOREIGN KEY` -> `procurement_tender_project.id`, `ON DELETE CASCADE` | Relasi ke paket tender pemilik |
 | `versi` | `VARCHAR(20)` | `NOT NULL`, Default: `'v1.0'` | Label versi dokumen (misal: `'v1.0'`, `'v2.0-revisi'`) |
 | `judul_dokumen` | `VARCHAR(255)` | `NOT NULL` | Judul berkas formal (misal: `Dokumen_Tender_IKPP_v2.0.docx`) |
-| `file_docx_path` | `VARCHAR(500)` | Nullable | Path relatif penyimpanan file Word di folder `media/generated_docs/` |
+| `file_docx_path` | `VARCHAR(500)` | Nullable | Path relatif file Word di storage `media/generated_docs/` |
 | `skor_kepatuhan_stk` | `SMALLINT` | `NOT NULL`, Default: `100` | Skor kesesuaian terhadap 86 aturan STK (rentang 0 - 100) |
 | `is_active` | `BOOLEAN` | `NOT NULL`, Default: `TRUE` | Menandai versi draf yang sedang aktif di Live Canvas |
 | `status_approval` | `VARCHAR(30)` | `NOT NULL`, Default: `'DRAFT'` | Pilihan: `'DRAFT'`, `'MENUNGGU_REVIEW'`, `'DISETUJUI'`, `'DITOLAK'` |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now-add | Waktu pembuatan versi dokumen |
-| `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now | Waktu modifikasi terakhir |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu pembuatan versi dokumen |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu modifikasi terakhir |
 
 ---
 
@@ -315,7 +336,7 @@ erDiagram
 
 | Nama Kolom | Tipe Data | Constraint | Keterangan & Aturan Bisnis |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | `PRIMARY KEY`, Default: `uuid4()` | Pengenal unik pasal/klausul |
+| `id` | `UUID` | `PRIMARY KEY`, Default: `gen_random_uuid()` | Pengenal unik pasal/klausul |
 | `draft_id` | `UUID` | `FOREIGN KEY` -> `procurement_document_draft.id`, `ON DELETE CASCADE` | Relasi ke draf dokumen induk |
 | `nomor_urut` | `INTEGER` | `NOT NULL` | Urutan tampilan bab/pasal (1 s.d. 40+) |
 | `kode_pasal` | `VARCHAR(50)` | `NOT NULL` | Kode referensi pasal (misal: `'IKPP-01'`, `'KONTRAK-PASAL-14'`) |
@@ -325,7 +346,7 @@ erDiagram
 | `is_edited_manual` | `BOOLEAN` | `NOT NULL`, Default: `FALSE` | Menandai apakah klausul telah diedit manual oleh PPK di canvas |
 | `status_verifikasi` | `VARCHAR(30)` | `NOT NULL`, Default: `'COMPLIANT'` | Status kesesuaian: `'COMPLIANT'`, `'WARNING'`, `'DEVIATED'` |
 | `catatan_stk` | `TEXT` | Nullable | Rujukan pasal Pedoman A03-001 yang mendasari klausul ini |
-| `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now | Waktu pembaruan teks klausul |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu pembaruan teks klausul |
 
 ---
 
@@ -335,7 +356,7 @@ erDiagram
 
 | Nama Kolom | Tipe Data | Constraint | Keterangan & Aturan Bisnis |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | `PRIMARY KEY`, Default: `uuid4()` | Pengenal unik berkas unggahan |
+| `id` | `UUID` | `PRIMARY KEY`, Default: `gen_random_uuid()` | Pengenal unik berkas unggahan |
 | `project_id` | `UUID` | `FOREIGN KEY` -> `procurement_tender_project.id`, `ON DELETE CASCADE` | Relasi ke paket pengadaan |
 | `tipe_berkas` | `VARCHAR(30)` | `NOT NULL` | Kategori: `'BOQ_EXCEL'`, `'RKS_PDF'`, `'TOR_KAK'`, `'GAMBAR_TEKNIK'` |
 | `nama_file_asli` | `VARCHAR(255)` | `NOT NULL` | Nama asli berkas saat diunggah oleh pengguna |
@@ -343,7 +364,7 @@ erDiagram
 | `ukuran_bytes` | `BIGINT` | `NOT NULL` | Ukuran berkas dalam byte |
 | `hash_md5` | `VARCHAR(32)` | `INDEX` | Hash checksum untuk mencegah duplikasi berkas identik |
 | `hasil_ekstraksi_json` | `JSONB` | Nullable, Default: `{}` | Hasil pembacaan teks / tabel oleh parser `summarizer.py` |
-| `uploaded_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now-add | Waktu berkas selesai diunggah |
+| `uploaded_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu berkas selesai diunggah |
 
 ---
 
@@ -353,11 +374,11 @@ erDiagram
 
 | Nama Kolom | Tipe Data | Constraint | Keterangan & Aturan Bisnis |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | `PRIMARY KEY`, Default: `uuid4()` | Pengenal unik sesi chat |
+| `id` | `UUID` | `PRIMARY KEY`, Default: `gen_random_uuid()` | Pengenal unik sesi chat |
 | `project_id` | `UUID` | `FOREIGN KEY` -> `procurement_tender_project.id`, `ON DELETE CASCADE` | Relasi ke proyek pengadaan terkait |
 | `judul_sesi` | `VARCHAR(150)` | `NOT NULL`, Default: `'Penyusunan Dokumen Tender'` | Judul topik sesi obrolan |
 | `is_active` | `BOOLEAN` | `NOT NULL`, Default: `TRUE` | Menandai sesi percakapan yang sedang terbuka di UI |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now-add | Waktu inisiasi sesi percakapan |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu inisiasi sesi percakapan |
 
 ---
 
@@ -367,7 +388,7 @@ erDiagram
 
 | Nama Kolom | Tipe Data | Constraint | Keterangan & Aturan Bisnis |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | `PRIMARY KEY`, Default: `uuid4()` | Pengenal unik pesan |
+| `id` | `UUID` | `PRIMARY KEY`, Default: `gen_random_uuid()` | Pengenal unik pesan |
 | `session_id` | `UUID` | `FOREIGN KEY` -> `procurement_chat_session.id`, `ON DELETE CASCADE` | Relasi ke sesi obrolan induk |
 | `role` | `VARCHAR(20)` | `NOT NULL` | Pengirim: `'user'`, `'assistant'`, `'system'` |
 | `content` | `TEXT` | `NOT NULL` | Teks isi pesan |
@@ -375,7 +396,7 @@ erDiagram
 | `artifacts_payload` | `JSONB` | Nullable | Data card interaktif yang dirender di bubble chat |
 | `prompt_tokens` | `INTEGER` | Nullable, Default: `0` | Jumlah token prompt input (untuk monitoring biaya LLM) |
 | `completion_tokens` | `INTEGER` | Nullable, Default: `0` | Jumlah token respons (untuk monitoring throughput) |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now-add | Waktu pesan dikirimkan |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu pesan dikirimkan |
 
 ---
 
@@ -394,7 +415,7 @@ erDiagram
 | `klausul_baku_docx` | `TEXT` | Nullable | Bunyi kalimat resmi yang wajib masuk ke dalam template Word |
 | `level_kepatuhan` | `VARCHAR(20)` | `NOT NULL`, Default: `'MANDATORY'` | Sifat aturan: `'MANDATORY'` (Wajib mutlak) atau `'OPTIONAL'` |
 | `qdrant_point_id` | `VARCHAR(64)` | Nullable, `INDEX` | ID vektor embeddings terkait di koleksi Qdrant |
-| `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now | Waktu pembaruan aturan |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu pembaruan aturan |
 
 ---
 
@@ -411,13 +432,13 @@ erDiagram
 | `modul_terkait` | `VARCHAR(50)` | `NOT NULL` | Modul yang disentuh: `'CANVAS'`, `'CHAT'`, `'EXPORTER'`, `'AUTH'` |
 | `rincian_perubahan` | `TEXT` | `NOT NULL` | Detail perubahan (misal: "Ubah Masa Pemeliharaan dari 90 menjadi 180 hari") |
 | `ip_address` | `VARCHAR(45)` | Nullable | Alamat IP jaringan pengguna |
-| `recorded_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, Auto-now-add | Waktu pencatatan jejak audit |
+| `recorded_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL`, ServerDefault: `now()` | Waktu pencatatan jejak audit |
 
 ---
 
 ### 4.3 Aturan Integritas Data & Indeks (*Database Indexing*)
 1. **Foreign Key Cascading**:
-   * Jika sebuah proyek tender (`procurement_tender_project`) dihapus, maka seluruh draf dokumen, klausul, riwayat chat, dan catatan auditnya otomatis dibersihkan (`ON DELETE CASCADE`).
+   * Jika proyek tender (`procurement_tender_project`) dihapus, seluruh draf dokumen, klausul, riwayat chat, dan catatan audit otomatis terhapus bersih (`ON DELETE CASCADE`).
 2. **Kueri Berkecepatan Tinggi (Indexing)**:
    * Kolom pencarian cepat seperti `no_tender`, `hash_md5`, `qdrant_point_id`, dan `tipe_aksi` dilengkapi indeks database B-Tree.
 3. **Format Field JSONB**:
@@ -427,42 +448,38 @@ erDiagram
 
 ## 5. Tahapan Implementasi (Rencana Kerja 5 Fase)
 
-### Fase 1: Inisialisasi & Skafolding Django Monolith
-- [ ] Inisialisasi Django 5 project (`pertamina_procurement`) dengan dependensi inti.
-- [ ] Pindahkan `agenticv3/index.html` ke `templates/index.html`, tambahkan tag `{% load static %}`.
-- [ ] Pindahkan folder `css/` dan `js/` ke `static/`.
-- [ ] Pasang **WhiteNoise** di `settings.py` sebagai *Plan B* (garansi static files berjalan instan tanpa Nginx).
-- [ ] Sesuaikan `api.js` agar secara otomatis membaca cookie `csrftoken` dan menyuntikkannya ke header `X-CSRFToken`.
+### Fase 1: Penataan Struktur Decoupled & Setup FastAPI
+- [ ] Buat struktur folder decoupled: `frontend/` (memuat `agenticv3`) dan `backend/` (FastAPI application).
+- [ ] Siapkan file `requirements.txt` untuk FastAPI (`fastapi`, `uvicorn[standard]`, `pydantic-settings`, `sqlalchemy[asyncio]`, `asyncpg`, `python-docx`, `qdrant-client`).
+- [ ] Buat `backend/app/main.py` dengan CORS middleware aktif dan OpenAPI Swagger di `/docs`.
+- [ ] Buat file konfigurasi `deploy/nginx/default.conf` untuk menghubungkan frontend statis dan proxy `/api/`.
 
-### Fase 2: Implementasi Database & Model ORM
-- [ ] Definisikan skema model `TenderProject`, `DocumentDraft`, dan `ChatMessage` di `apps/procurement/models.py`.
-- [ ] Jalankan migrasi awal (`python manage.py makemigrations && python manage.py migrate`).
-- [ ] Daftarkan model ke Django Admin (`admin.py`) untuk kemudahan audit dan inspeksi data dokumen.
+### Fase 2: Implementasi Database SQLAlchemy 2.0 & Alembic
+- [ ] Definisikan 8 model tabel deklaratif di `backend/app/models/`.
+- [ ] Konfigurasi koneksi async database di `backend/app/database.py`.
+- [ ] Inisialisasi Alembic (`alembic init -t async alembic`) dan buat migrasi awal (`alembic revision --autogenerate -m "initial_procurement_tables"`).
+- [ ] Jalankan migrasi ke PostgreSQL lokal / Docker (`alembic upgrade head`).
 
-### Fase 3: Porting Modul AI & RAG Pipeline
-- [ ] Pindahkan logic dari `Agentic_Rag_Pertamina_camp` (`RAG/`, `tender/`, `contract/`) ke `apps/rag_engine/`.
-- [ ] Implementasikan endpoint Async di `apps/procurement/api_views.py`:
-  - `POST /api/extract-tender-metadata/`
-  - `POST /api/generate-tender/`
-  - `POST /api/generate-rks/`
-  - `POST /api/generate-kontrak/`
-  - `POST /api/generate-amendemen/`
-  - `GET /api/health/`
-- [ ] Verifikasi format unduhan `.docx` dengan template styling resmi Pertamina.
+### Fase 3: Integrasi Modul AI RAG ke Endpoint FastAPI
+- [ ] Pindahkan logic dari `Agentic_Rag_Pertamina_camp` (`RAG/`, `tender/`, `contract/`) ke `backend/app/services/`.
+- [ ] Implementasikan router endpoint asinkron di `backend/app/api/`:
+  - `POST /api/extract-tender-metadata` (Ekstraksi BoQ Excel & RKS PDF acuan).
+  - `POST /api/generate-tender` (Export 40 Poin IKPP .docx).
+  - `POST /api/generate-rks` (Export RKS .docx).
+  - `POST /api/generate-kontrak` (Export Kontrak .docx).
+  - `POST /api/generate-amendemen` (Export Amendemen .docx).
+  - `POST /api/kb/ingest` & `GET /api/kb/list` (Koneksi Qdrant Vector Store).
+- [ ] Verifikasi format unduhan `.docx` dengan template styling resmi Pertamina (`doc_config.json`).
 
-### Fase 4: Konfigurasi Celery Worker & Streaming Token
-- [ ] Pasang Celery dengan Redis broker untuk pemrosesan file `.docx` berat.
-- [ ] Hubungkan indikator progres frontend (*Progress Drawer* & *Live Sync Badge*) dengan status task worker.
-- [ ] (Opsional) Implementasikan `StreamingHttpResponse` untuk streaming token jawaban AI per kata.
+### Fase 4: Konfigurasi Celery Worker & Streaming Token AI (SSE)
+- [ ] Hubungkan Celery dengan Redis broker untuk pemrosesan file `.docx` masif di latar belakang.
+- [ ] Implementasikan endpoint `GET /api/chat/stream` menggunakan `EventSourceResponse` (Server-Sent Events) untuk streaming token jawaban AI per kata.
+- [ ] Sinkronkan status task worker dengan indikator progres frontend (*Progress Drawer* & *Live Sync Badge*).
 
-### Fase 5: Dockerization, Nginx, & Pipeline CI/CD Siap Deploy
-- [ ] Susun `Dockerfile` multi-stage untuk Django ASGI & Celery.
-- [ ] Buat file konfigurasi `nginx.conf`:
-  - `client_max_body_size 100M;` (upload BoQ besar aman).
-  - `proxy_read_timeout 300s;` (mencegah timeout saat LLM berpikir).
-  - `proxy_buffering off;` (mendukung streaming AI instan).
-- [ ] Buat `docker-compose.yml` yang menghubungkan service: `nginx`, `web`, `celery_worker`, `redis`, dan `qdrant`.
-- [ ] Siapkan workflow `.github/workflows/deploy.yml` untuk otomatisasi testing & rilis.
+### Fase 5: Dockerization, Nginx Gateway, & Pipeline CI/CD
+- [ ] Susun `Dockerfile` multi-stage untuk FastAPI & Celery.
+- [ ] Buat `docker-compose.yml` yang menghubungkan service: `nginx`, `web`, `celery_worker`, `redis`, `qdrant`, dan `db`.
+- [ ] Siapkan workflow `.github/workflows/deploy.yml` dengan automated tests (Pytest).
 - [ ] Uji coba skenario *end-to-end* (Upload BoQ -> Ekstraksi AI -> Edit Canvas -> Generate Dokumen -> Unduh .docx).
 
 ---
@@ -471,10 +488,10 @@ erDiagram
 
 | Potensi Kendala | Risiko | Solusi Mitigasi |
 | :--- | :--- | :--- |
-| **Server belum siap Docker** | Deployment tertunda | Aktifkan **WhiteNoise + Gzip/Brotli** di `settings.py`. Aplikasi langsung bisa dijalankan dengan `python manage.py runserver` atau Gunicorn/Uvicorn tunggal. |
 | **Ekstraksi BoQ Excel memakan waktu lama** | Browser mengalami timeout | Celery worker menangani parsing di background dan mengirimkan sinyal progres ke frontend. |
-| **CSRF Token Blocking pada AJAX Fetch** | Request `POST` ditolak (HTTP 403) | `api.js` dilengkapi helper fungsi ekstraksi cookie CSRF Django secara otomatis. |
-| **Koneksi LLM terputus di tengah jalan** | Dokumen gagal terbentuk utuh | Logika *retry mechanism* (maksimal 3 kali) pada `rag_engine` sebelum melaporkan error ke chat window. |
+| **Koneksi LLM terputus di tengah jalan** | Dokumen gagal terbentuk utuh | Logika *retry mechanism* (maksimal 3 kali) pada `services` sebelum melaporkan error ke chat window. |
+| **CORS Blocking pada Pengujian Lokal** | Request frontend ditolak browser | FastAPI mengaktifkan `CORSMiddleware` dengan whitelist origin yang fleksibel saat `DEBUG=True`. |
+| **Migrasi Skema Database di Produksi** | Kegagalan update tabel | Menggunakan Alembic versioning dengan verifikasi *dry-run* (`alembic upgrade --sql`) sebelum eksekusi riil. |
 
 ---
 
@@ -493,49 +510,45 @@ sequenceDiagram
 
     Dev->>Git: 1. Push Fitur Baru (git push origin main)
     Git->>CI: 2. Trigger Workflow Otomatis
-    Note over CI: Run Tests & Linter<br/>- Tes API Django<br/>- Tes Ekspor .DOCX<br/>- Build Docker Image Test
+    Note over CI: Run Tests & Linter<br/>- Pytest API FastAPI<br/>- Tes Ekspor .DOCX<br/>- Build Docker Image Test
     CI->>Reg: 3. Jika Tes Lolos: Push Image Baru (:latest)
     CI->>Server: 4. Kirim Sinyal Update (via SSH / Webhook)
-    Note over Server: Server Mengeksekusi:<br/>- docker compose pull<br/>- python manage.py migrate<br/>- python manage.py collectstatic<br/>- docker compose up -d (Rolling Update)
-    Server-->>User: 5. Fitur Baru Langsung Tayang (Tanpa Gangguan / Zero Downtime!)
+    Note over Server: Server Mengeksekusi:<br/>- docker compose pull<br/>- alembic upgrade head<br/>- docker compose up -d (Rolling Update)
+    Server-->>User: 5. Fitur Baru Langsung Tayang (Zero Downtime!)
 ```
 
 ### 7.2 Siklus Penambahan Fitur Baru (Developer Workflow)
-Setiap penambahan fitur baru (misalnya: penambahan evaluasi otomatis skor CSMS vendor, penyesuaian pasal STK baru, atau pembaruan UI canvas) mengikuti alur terstandarisasi:
-
 1. **Lokal (Branching & Development)**:
    - Developer membuat branch fitur baru: `git checkout -b feature/nama-fitur`.
-   - Mengubah skema model di `apps/procurement/models.py`, menjalankan `python manage.py makemigrations`.
-   - Menulis/memperbarui komponen UI di `templates/` atau `static/`.
-   - Menjalankan unit test lokal: `python manage.py test`.
+   - Mengubah model di `backend/app/models/`, menjalankan `alembic revision --autogenerate -m "add_new_feature"`.
+   - Menulis/memperbarui komponen UI di `frontend/`.
+   - Menjalankan unit test lokal: `pytest backend/tests/`.
 2. **Pull Request & Continuous Integration (CI)**:
    - Developer mem-push branch ke GitHub dan membuka Pull Request (PR) ke `main`.
    - GitHub Actions otomatis menjalankan:
-     - **Linting & Code Style**: Memastikan kode memenuhi standar PEP8 / formatting bersih.
-     - **Django Unit Tests**: Memverifikasi model, serializers, dan views API.
-     - **Document Generator Test**: Memastikan fungsi ekspor `.docx` menghasilkan berkas Word yang valid tanpa korupsi XML.
+     - **Linting & Code Style**: Flake8 / Ruff.
+     - **Pytest**: Memverifikasi validasi Pydantic, route FastAPI, dan generator `.docx`.
      - **Docker Build Check**: Memastikan image Docker berhasil di-build tanpa missing dependency.
    - PR hanya dapat di-merge jika seluruh pengujian berstatus **HIJAU (PASS)**.
 3. **Continuous Deployment (CD) ke Server**:
    - Setelah branch di-merge ke `main`, GitHub Actions mentrigger proses deployment:
-     - Mem-build image final dengan tag versi rilis (misal `v1.2.0` dan `latest`).
+     - Mem-build image final dengan tag versi rilis (`v1.2.0` dan `latest`).
      - Melakukan koneksi SSH aman ke server staging/production.
      - Menjalankan rolling update:
        ```bash
        docker compose pull web celery_worker
-       docker compose run --rm web python manage.py migrate
-       docker compose run --rm web python manage.py collectstatic --noinput
+       docker compose run --rm web alembic upgrade head
        docker compose up -d --no-deps web celery_worker
        ```
      - Nginx secara mulus meneruskan request baru ke container versi anyar (*zero-downtime*).
 
 ### 7.3 Manajemen Database & Ketahanan Data (Zero Data Loss)
-- **Persistensi Data**: Database (PostgreSQL / SQLite) dan folder berkas upload (`media/`) disimpan pada **Docker Volume** di disk fisik server, terisolasi dari container aplikasi. Container dapat di-rebuild berulang kali tanpa risiko kehilangan berkas pengadaan atau riwayat chat.
-- **Migrasi Non-Destruktif**: Migrasi schema (`manage.py migrate`) menerapkan penambahan kolom/tabel secara inkremental tanpa menghapus data yang sudah ada.
+- **Persistensi Data**: Database PostgreSQL dan folder berkas upload (`media/`) disimpan pada **Docker Volume** di disk fisik server, terisolasi dari container aplikasi. Container dapat di-rebuild berulang kali tanpa risiko kehilangan data pengadaan atau riwayat chat.
+- **Migrasi Non-Destruktif**: Migrasi schema via Alembic menerapkan penambahan kolom/tabel secara inkremental tanpa menghapus data yang sudah ada.
 
 ### 7.4 Spesifikasi Konfigurasi GitHub Actions (`.github/workflows/deploy.yml`)
 ```yaml
-name: CI/CD Pertamina Copilot
+name: CI/CD Pertamina Copilot (FastAPI)
 
 on:
   push:
@@ -553,10 +566,11 @@ jobs:
           python-version: '3.11'
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt
-      - name: Run Django Tests
+          pip install -r backend/requirements.txt
+          pip install pytest httpx
+      - name: Run Pytest Suites
         run: |
-          python manage.py test
+          pytest backend/tests/
 
   deploy:
     name: Deploy to Server
@@ -574,8 +588,7 @@ jobs:
             cd /opt/pertamina-procurement
             git pull origin main
             docker compose build
-            docker compose run --rm web python manage.py migrate
-            docker compose run --rm web python manage.py collectstatic --noinput
+            docker compose run --rm web alembic upgrade head
             docker compose up -d
 ```
 
@@ -585,22 +598,18 @@ jobs:
 
 ### 8.1 Arsitektur Multi-Kontainer (6 Layanan Terisolasi)
 
-Seluruh ekosistem Pertamina Procurement Copilot dirancang berjalan di dalam jaringan kontainer Docker yang terisolasi (*isolated bridge network*), memastikan dependensi antar-layanan tidak saling mengganggu:
-
 | Layanan (Service) | Base Image | Port Eksternal | Port Internal | Peran & Tanggung Jawab |
 | :--- | :--- | :--- | :--- | :--- |
-| **`nginx`** | `nginx:1.25-alpine` | `80`, `443` | `80`, `443` | Reverse proxy, static cache (`sendfile`), buffer upload 100MB, timeout AI 300s. |
-| **`web`** | Custom Python 3.11 | - | `8000` | Django 5 Monolith + ASGI runner (`uvicorn`), melayani template & REST API. |
+| **`nginx`** | `nginx:1.25-alpine` | `80`, `443` | `80`, `443` | Reverse proxy, static server `frontend/`, buffer upload 100MB, timeout AI 300s. |
+| **`web`** | Custom Python 3.11 | - | `8000` | FastAPI ASGI application (`uvicorn`), melayani OpenAPI Swagger & REST API. |
 | **`celery_worker`**| Custom Python 3.11 | - | - | Background worker untuk generasi dokumen Word (`.docx`) & ekstraksi BoQ berat. |
 | **`redis`** | `redis:7-alpine` | - | `6379` | Message broker untuk antrean tugas Celery & caching session. |
 | **`qdrant`** | `qdrant/qdrant:latest`| - | `6333` | Vector Database penyimpanan embeddings 86 Aturan Pedoman Pengadaan STK. |
-| **`db`** | `postgres:16-alpine` | - | `5432` | Pangkalan data relasional (ORM) untuk menyimpan proyek, klausul, dan audit trail. |
+| **`db`** | `postgres:16-alpine` | - | `5432` | Pangkalan data relasional (PostgreSQL) untuk menyimpan proyek, klausul, dan audit trail. |
 
 ---
 
 ### 8.2 Spesifikasi `Dockerfile` (Multi-Stage Production Build)
-
-File `Dockerfile` menggunakan teknik *multi-stage build* untuk meminimalkan ukuran image akhir dan meningkatkan keamanan (*non-root user*):
 
 ```dockerfile
 # Stage 1: Build & Compile Dependencies
@@ -614,7 +623,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
@@ -627,24 +636,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Buat pengguna non-root demi standar keamanan BUMN
+# Akun pengguna non-root demi standar keamanan BUMN
 RUN groupadd -r pertamina && useradd -r -g pertamina pertamina
 
 COPY --from=builder /app/wheels /wheels
 RUN pip install --no-cache /wheels/* && rm -rf /wheels
 
-COPY . .
+COPY backend/ .
 RUN chown -R pertamina:pertamina /app
 
 USER pertamina
 EXPOSE 8000
 
-CMD ["uvicorn", "core.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--lifespan", "off"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 ```
 
 ---
 
-### 8.3 Blueprint `docker-compose.yml` (Siap Deploy)
+### 8.3 Blueprint `docker-compose.yml` (Opsi A: Decoupled Siap Deploy)
 
 ```yaml
 version: '3.8'
@@ -689,16 +698,15 @@ services:
     networks:
       - pertamina_internal_net
 
-  # 4. Django ASGI Web Application
+  # 4. FastAPI ASGI Web Application
   web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: pertamina_web
+    container_name: pertamina_fastapi
     restart: always
-    command: uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --workers 4
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
     volumes:
-      - static_volume:/app/staticfiles
       - media_volume:/app/media
     env_file:
       - .env
@@ -719,7 +727,7 @@ services:
       dockerfile: Dockerfile
     container_name: pertamina_celery
     restart: always
-    command: celery -A core worker -l info --concurrency=4
+    command: celery -A app.services.tasks worker -l info --concurrency=4
     volumes:
       - media_volume:/app/media
     env_file:
@@ -732,7 +740,7 @@ services:
     networks:
       - pertamina_internal_net
 
-  # 6. Nginx Edge Gateway & Static Server
+  # 6. Nginx Edge Gateway & Frontend Server
   nginx:
     image: nginx:1.25-alpine
     container_name: pertamina_nginx
@@ -742,8 +750,8 @@ services:
       - "443:443"
     volumes:
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - static_volume:/app/static:ro
-      - media_volume:/app/media:ro
+      - ./frontend:/usr/share/nginx/html:ro
+      - media_volume:/usr/share/nginx/html/media:ro
     depends_on:
       - web
     networks:
@@ -757,8 +765,6 @@ volumes:
     driver: local
   qdrant_storage:
     driver: local
-  static_volume:
-    driver: local
   media_volume:
     driver: local
 
@@ -769,30 +775,69 @@ networks:
 
 ---
 
-### 8.4 Perintah Operasional Docker (One-Command Startup)
+### 8.4 Konfigurasi `deploy/nginx/default.conf`
 
-Untuk menjalankan seluruh sistem di server atau komputer pengujian:
+```nginx
+server {
+    listen 80;
+    server_name localhost;
+    client_max_body_size 100M;
 
-1. **Menjalankan Seluruh Ekosistem Kontainer**:
-   ```bash
-   docker compose up -d --build
-   ```
-2. **Menjalankan Migrasi Database di Dalam Kontainer**:
-   ```bash
-   docker compose exec web python manage.py migrate
-   ```
-3. **Mengumpulkan Aset Statis CSS/JS untuk Nginx**:
-   ```bash
-   docker compose exec web python manage.py collectstatic --noinput
-   ```
-4. **Membuat Akun Admin Pertamina**:
-   ```bash
-   docker compose exec web python manage.py createsuperuser
-   ```
-5. **Memeriksa Log Status Seluruh Kontainer**:
-   ```bash
-   docker compose logs -f web celery_worker
-   ```
+    # 1. Sajikan Frontend Statis agenticv3 secara langsung
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+        
+        # Cache aset statis
+        location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+            expires 7d;
+            add_header Cache-Control "public, no-transform";
+        }
+    }
+
+    # 2. Teruskan API Call ke Backend FastAPI
+    location /api/ {
+        proxy_pass http://web:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Pengaturan khusus AI Streaming & Dokumen Berat
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_buffering off;
+        proxy_cache off;
+    }
+
+    # 3. Akses Swagger Documentation
+    location /docs {
+        proxy_pass http://web:8000/docs;
+        proxy_set_header Host $host;
+    }
+    location /openapi.json {
+        proxy_pass http://web:8000/openapi.json;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+---
+
+### 8.5 Perintah Operasional Docker (One-Command Startup)
+
+```bash
+# 1. Menjalankan Seluruh Ekosistem Kontainer
+docker compose up -d --build
+
+# 2. Menjalankan Migrasi Database di Dalam Kontainer
+docker compose exec web alembic upgrade head
+
+# 3. Memeriksa Log Status Kontainer
+docker compose logs -f web celery_worker
+```
 
 ---
 
@@ -800,11 +845,9 @@ Untuk menjalankan seluruh sistem di server atau komputer pengujian:
 
 ### 9.1 Manajemen Rahasia & Kebijakan Nol Kebocoran Kredensial (*Secrets Management*)
 
-Untuk memenuhi standar keamanan informasi korporat BUMN dan perbankan, pengelolaan variabel sensitif diatur dengan protokol ketat:
-
 1. **Penegakan Aturan `.gitignore`**:
-   * File `.env` yang berisi *kunci API produksi*, *password database*, dan *Django SECRET_KEY* **dilarang keras** di-commit ke repositori Git.
-   * File `.gitignore` wajib mencantumkan pengecualian:
+   * File `.env` yang berisi *kunci API produksi*, *password database*, dan *kredensial Qdrant* **dilarang keras** di-commit ke repositori Git.
+   * File `.gitignore` wajib mencantumkan:
      ```text
      .env
      .env.local
@@ -812,18 +855,17 @@ Untuk memenuhi standar keamanan informasi korporat BUMN dan perbankan, pengelola
      media/
      output/
      __pycache__/
+     .pytest_cache/
      ```
 2. **Penyediaan Berkas Acuan `.env.example`**:
-   * Pengembang baru hanya diperbolehkan menyalin dari `.env.example` yang berisi variabel dummy tanpa kredensial rahasia:
+   * Pengembang baru menyalin dari `.env.example`:
      ```env
      DEBUG=False
-     SECRET_KEY=change-this-in-production-to-a-secure-random-string
-     ALLOWED_HOSTS=127.0.0.1,localhost,copilot.pertamina.com
-     POSTGRES_DB=pertamina_db
-     POSTGRES_USER=pertamina_user
-     POSTGRES_PASSWORD=secure_password_placeholder
+     DATABASE_URL=postgresql+asyncpg://pertamina_user:secure_password@db:5432/pertamina_db
      QDRANT_URL=http://qdrant:6333
      OPENROUTER_API_KEY=sk-or-v1-placeholder
+     CELERY_BROKER_URL=redis://redis:6379/0
+     CELERY_RESULT_BACKEND=redis://redis:6379/0
      ```
 3. **Injeksi Kredensial CI/CD via GitHub Secrets**:
    * Seluruh kredensial akses server (`SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`) diinjeksikan secara terenkripsi saat pipeline berjalan tanpa pernah terekspos di log pengujian.
@@ -837,7 +879,7 @@ Aktivitas penyusunan dokumen tender menghasilkan berkas *scratch*, pecahan halam
 1. **Jadwal Pembersihan Berkala via Celery Beat**:
    * Menjadwalkan tugas otomatis (*cron job*) yang berjalan setiap hari pukul **02.00 WIB**:
      ```python
-     # apps/rag_engine/tasks.py
+     # backend/app/services/tasks.py
      from celery import shared_task
      import os, time
 
@@ -864,4 +906,3 @@ Aktivitas penyusunan dokumen tender menghasilkan berkas *scratch*, pecahan halam
      ```
 2. **Kepatuhan Privasi Data Pengadaan**:
    * Berkas sementara yang dihapus otomatis memastikan dokumen acuan vendor tidak tertimbun selamanya di disk server tanpa pengawasan.
-
