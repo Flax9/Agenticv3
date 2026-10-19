@@ -10,6 +10,8 @@
 
 > **Hubungan dengan masterplan:** Arsitektur, struktur direktori, database, keamanan, dan deployment diatur di `draft_perencanaan_proyek_ITeC.md`. Dokumen ini hanya mengatur **tampilan, perilaku UI, dan pemetaan prototipe vanilla → komponen React**. Bila ada perbedaan, masterplan yang berlaku.
 
+> **Revisi alur (19 Okt 2026, masterplan 1.0):** unggah berkas dari browser tidak dipakai lagi. Tombol 📎 di `ChatInput` dan tombol "Pilih Berkas dari Drive" membuka `DatasetPickerModal`, yang menampilkan berkas di folder drive (`GET /api/dataset/files`). Mode RKS memakai chat agent sungguhan: SSE dengan progres per tahap, saran cepat sesuai node yang menunggu ("Lanjut Tanpa BoQ", "Setuju & Ekspor"), dan draf tampil di `RksDraftView`. Riwayat sesi ada di `HamburgerMenu`, sedangkan status proses tampil di `ProgressDrawer` dan `VerticalRestoreTab`. Penyebutan "upload" di bawah ini adalah catatan desain prototipe awal.
+
 ---
 
 ## 1. 🎯 Tujuan & Visi Front-End `agenticv3`

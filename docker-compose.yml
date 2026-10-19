@@ -1,0 +1,86 @@
+# Ekosistem lengkap (masterplan 8): nginx + web + db + qdrant.
+#   docker compose up -d --build
+#   docker compose exec web python -m app.scripts.seed admin
+# Aplikasi terbuka di http://localhost:${HTTP_PORT:-80}. Untuk HTTPS lihat compose.https.yml.
+# Celery + Redis belum dipakai: job latar belakang berjalan di dalam proses web (Fase 4).
+name: itec
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: itec_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pertamina_db}
+      POSTGRES_USER: ${POSTGRES_USER:-pertamina_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diisi di .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  # Qdrant self-host: data knowledge base tidak keluar dari server
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    container_name: itec_qdrant
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_LOCAL_API_KEY:?QDRANT_LOCAL_API_KEY wajib diisi di .env}
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks: [internal]
+
+  web:
+    build:
+      context: ./backend
+    image: itec/web:${IMAGE_TAG:-local}
+    container_name: itec_web
+    restart: unless-stopped
+    env_file: .env
+    # Nilai di bawah mengalahkan .env (yang berisi alamat untuk development di luar Docker)
+    environment:
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pertamina_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pertamina_db}
+      QDRANT_CLUSTER_ENDPOINT: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_LOCAL_API_KEY}
+      DATASET_DIR: /data/dataset
+      OUTPUT_DIR: /app/output
+    volumes:
+      - output:/app/output
+      # Model embedding & Docling diunduh sekali lalu disimpan di sini
+      - model_cache:/app/.cache
+      # Folder drive yang disinkronkan klien Google Drive / OneDrive di host (hanya dibaca)
+      - ${DATASET_HOST_DIR:-./dataset}:/data/dataset:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks: [internal]
+
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: itec/nginx:${IMAGE_TAG:-local}
+    container_name: itec_nginx
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [internal]
+
+volumes:
+  pgdata:
+  qdrant_storage:
+  output:
+  model_cache:
+
+networks:
+  internal:

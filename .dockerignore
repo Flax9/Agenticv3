@@ -1,0 +1,6 @@
+# Context root hanya dipakai frontend/Dockerfile: kirim frontend/ dan deploy/nginx/ saja
+*
+!frontend/
+!deploy/nginx/
+frontend/node_modules/
+frontend/dist/

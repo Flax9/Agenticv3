@@ -1,0 +1,70 @@
+# CI (masterplan 7.4): berjalan di setiap pull request dan push.
+# Tidak membutuhkan LLM maupun Qdrant: test backend memakai agent & vector store palsu.
+# Deploy otomatis (deploy.yml) menyusul setelah server tujuan ditetapkan.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (oxlint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend (ruff + alembic + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: pertamina_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d pertamina_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://ci:ci@localhost:5432/pertamina_test
+      DATABASE_URL: postgresql+asyncpg://ci:ci@localhost:5432/pertamina_test
+      JWT_SECRET: ci-secret-yang-hanya-dipakai-untuk-test-0123456789
+      # Modul AI membuat klien LLM saat diimpor; test tidak pernah memanggilnya
+      OPENROUTER_API_KEY: sk-or-ci-dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.13"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check app tests
+      - run: uv run ruff format --check app tests
+      - name: Migrasi sesuai model (alembic check)
+        run: uv run alembic upgrade head && uv run alembic check
+      - run: uv run pytest -q

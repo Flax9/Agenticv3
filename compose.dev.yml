@@ -1,6 +1,6 @@
 # Layanan pendukung untuk development lokal (backend & frontend tetap dijalankan langsung).
 # Jalankan:  docker compose -f compose.dev.yml up -d
-# Berkas docker-compose.yml untuk produksi menyusul di Fase 5 (masterplan 8.3).
+# Ekosistem lengkap (nginx + web + db + qdrant) ada di docker-compose.yml (masterplan 8).
 name: itec-dev
 
 services:

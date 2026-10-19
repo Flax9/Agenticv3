@@ -18,7 +18,11 @@ media/generated_docs/
 .env
 .env.local
 *.local
-deploy/certs/
+deploy/certs/*
+!deploy/certs/README.md
+
+# Folder dataset default untuk docker compose (DATASET_HOST_DIR)
+/dataset/
 
 # Logs
 *.log

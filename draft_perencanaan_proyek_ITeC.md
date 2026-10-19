@@ -720,11 +720,13 @@ Penegakan dilakukan di backend melalui dependency `require_role(...)` pada setia
 - [x] Housekeeping (masterplan 9.2) sebagai task periodik di *lifespan* FastAPI: berkas di `OUTPUT_DIR` yang lebih tua dari `TEMP_RETENTION_DAYS` (7 hari) dihapus, kecuali `output/drafts/`.
 
 ### Fase 5: Dockerization, Nginx Gateway, & Pipeline CI/CD
-- [ ] Susun `backend/Dockerfile` (Python FastAPI + Uvicorn) dan `frontend/Dockerfile` (Node build → Nginx).
-- [ ] Buat `docker-compose.yml` dengan service inti `nginx`, `web`, `qdrant`, `db` (+ `redis`, `celery_worker`, `celery_beat` sebagai profil opsional).
-- [ ] Siapkan `.github/workflows/ci.yml` (setiap PR & push) dan `.github/workflows/deploy.yml` (hanya `main`).
-- [ ] Pasang sertifikat TLS (Let's Encrypt / sertifikat korporat) di Nginx.
-- [ ] Uji coba skenario *end-to-end* (Login → Upload BoQ → Ekstraksi AI → Edit Canvas di React → Generate Dokumen → Approval → Unduh .docx).
+- [x] Susun `backend/Dockerfile` (multi-stage uv, torch CPU, user non-root, migrasi otomatis saat start) dan `frontend/Dockerfile` (Node 24 build → `nginx:1.29-alpine`). Detail di bagian 8.
+- [x] Buat `docker-compose.yml` dengan service inti `nginx`, `web`, `qdrant`, `db`. Profil Redis/Celery tidak dibuat (keputusan Fase 4).
+- [x] Siapkan `.github/workflows/ci.yml` (setiap PR & push; lolos `actionlint`). `deploy.yml` ditunda sampai server tujuan ditetapkan (rancangan di 7.4).
+- [x] Siapkan tempat TLS: `deploy/nginx/https.conf` + `compose.https.yml` (`nginx -t` lolos dengan sertifikat uji).
+- [ ] Pasang sertifikat TLS sungguhan: menunggu domain (`deploy/certs/README.md`).
+- [x] Uji *end-to-end* di Docker (19 Okt 2026, laptop, `HTTP_PORT=8088`): build kedua image → migrasi otomatis → seed admin → login lewat Nginx → chat RKS via SSE (turn pertama ±3 menit karena model embedding diunduh ke volume `model_cache`; heartbeat menjaga koneksi; turn berikutnya ±33 detik) → job sinkronisasi dataset → riwayat tetap ada setelah `web` di-restart. Header keamanan & cache aset terverifikasi. Approval tidak diuji (di luar lingkup produk saat ini). Alur BoQ → draf → `.docx` sudah diuji di Fase 3 di luar Docker.
+- Catatan: Qdrant container masih kosong (knowledge base diisi lewat sinkronisasi drive). State agent (MemorySaver) hilang saat `web` restart: pesan tetap tersimpan, tetapi percakapan agent yang sedang menunggu jawaban mulai dari awal (`pertanyaan penanggung jawab ai.md` F5). Klien Qdrant memberi peringatan "API key over insecure connection"; aman karena lalu lintasnya hanya di jaringan internal Docker.
 
 ---
 
@@ -797,75 +799,22 @@ sequenceDiagram
 
 ### 7.4 Spesifikasi Konfigurasi GitHub Actions
 
-#### `.github/workflows/ci.yml`
-```yaml
-name: CI ITeC Copilot (React Vite + FastAPI)
+#### `.github/workflows/ci.yml` (sudah dibuat, Fase 5)
+Berjalan di setiap `push` dan `pull_request`, tanpa LLM maupun Qdrant (test memakai agent & vector store palsu):
+- **frontend:** Node 24 → `npm ci` → `npm run lint` (oxlint) → `npm run build`.
+- **backend:** service `postgres:16-alpine` → `uv sync --frozen` (uv 0.12.13) → `ruff check` → `ruff format --check` → `alembic upgrade head && alembic check` → `pytest`.
 
-on:
-  pull_request:
-    branches: [ "main" ]
-  push:
-    branches: [ "main" ]
+Isi lengkapnya ada di berkas tersebut.
 
-jobs:
-  test-frontend:
-    name: Lint & Build React Vite Frontend
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run build
+#### `.github/workflows/deploy.yml` (rancangan, **belum dibuat**)
+Ditunda sampai server tujuan ditetapkan (saat ini aplikasi masih berjalan di laptop). Saat diaktifkan, ganti `image:` di `docker-compose.yml` (`itec/web`, `itec/nginx`) dengan nama image GHCR di bawah. Rancangan awalnya:
 
-  test-backend:
-    name: Lint & Pytest Backend
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: test_db
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_pass
-        ports: [ "5432:5432" ]
-        options: >-
-          --health-cmd "pg_isready -U test_user -d test_db"
-          --health-interval 10s --health-timeout 5s --health-retries 5
-    env:
-      DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
-      JWT_SECRET: ci-only-secret
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: astral-sh/setup-uv@v6
-      - name: Install Dependencies
-        working-directory: backend
-        run: uv sync --frozen
-      - run: uv run ruff check .
-        working-directory: backend
-      - run: uv run pytest
-        working-directory: backend
-```
-
-#### `.github/workflows/deploy.yml`
 ```yaml
 name: Deploy ITeC Copilot
 
 on:
   workflow_run:
-    workflows: [ "CI ITeC Copilot (React Vite + FastAPI)" ]
+    workflows: [ "CI" ]   # sama dengan `name:` di ci.yml
     types: [ completed ]
     branches: [ "main" ]
 
@@ -927,305 +876,63 @@ jobs:
 
 ## 8. Spesifikasi Infrastruktur Kontainerisasi (Docker & Docker Compose)
 
+> **Diperbarui di Fase 5 (19 Okt 2026).** Isi berkas sebenarnya menjadi acuan; bagian ini hanya merangkum keputusan desainnya agar tidak terjadi dua versi konfigurasi.
+
 ### 8.1 Arsitektur Multi-Kontainer
 
-| Layanan (Service) | Image | Port Eksternal | Port Internal | Status | Peran & Tanggung Jawab |
-| :--- | :--- | :--- | :--- | :---: | :--- |
-| **`nginx`** | Custom (`frontend/Dockerfile`, basis `nginx:1.27-alpine`) | `80`, `443` | `80`, `443` | Inti | Reverse proxy + TLS, menyajikan build React (`dist/` di dalam image), buffer upload 100MB, timeout AI 300s. |
-| **`web`** | Custom (`backend/Dockerfile`, Python 3.12) | - | `8000` | Inti | FastAPI ASGI application (`uvicorn`), REST API + SSE. |
-| **`db`** | `postgres:16-alpine` | - | `5432` | Inti | PostgreSQL untuk menyimpan pengguna, proyek, klausul, dan audit trail. |
-| **`qdrant`** | `qdrant/qdrant:v1.12.4` | - | `6333` | Inti | Vector Database penyimpanan embeddings 86 Aturan Pedoman Pengadaan STK. Versi dikunci, jangan `latest`. |
-| **`redis`** | `redis:7-alpine` | - | `6379` | Opsional (profil `worker`) | Message broker untuk antrean tugas Celery. |
-| **`celery_worker`**| Sama dengan `web` | - | - | Opsional (profil `worker`) | Background worker generasi `.docx` & ekstraksi BoQ berat. |
-| **`celery_beat`** | Sama dengan `web` | - | - | Opsional (profil `worker`) | Penjadwal tugas berkala (housekeeping 02.00 WIB, lihat 9.2). |
+| Layanan | Image | Port host | Peran |
+| :--- | :--- | :--- | :--- |
+| **`nginx`** | `frontend/Dockerfile` (Node 24 build → `nginx:1.29-alpine`) | `${HTTP_PORT:-80}` (+ `${HTTPS_PORT:-443}` di mode HTTPS) | Menyajikan build React, reverse proxy `/api` ke `web`, header keamanan, SSE tanpa buffer, TLS (opsional). |
+| **`web`** | `backend/Dockerfile` (Python 3.12-slim + uv, torch CPU) | – | FastAPI + agent + job latar belakang. Migrasi Alembic dijalankan otomatis saat start (`docker-entrypoint.sh`, matikan dengan `RUN_MIGRATIONS=false`). |
+| **`db`** | `postgres:16-alpine` | – | PostgreSQL. |
+| **`qdrant`** | `qdrant/qdrant:v1.19.2` (dikunci, setara klien `qdrant-client 1.19.1`) | – | Knowledge base self-host, sehingga data tidak keluar dari server. API key dari `QDRANT_LOCAL_API_KEY`. |
 
----
+Keputusan penting:
+- **Satu worker Uvicorn.** Job latar belakang, lock per sesi chat, pembatas login, dan state agent (MemorySaver) masih disimpan di memori proses. Menambah worker baru aman setelah semuanya dipindah ke Redis/Postgres.
+- **Celery + Redis belum dipasang.** Hasil ukur Fase 4 menunjukkan chat cukup memakai SSE + heartbeat, dan sinkronisasi drive cukup memakai job in-process. Profil `worker` di rancangan lama ditunda.
+- **Volume:** `pgdata`, `qdrant_storage`, `output` (draf `.docx`), `model_cache` (model embedding & Docling, diunduh sekali). Folder drive host di-mount **read-only** ke `/data/dataset` lewat `DATASET_HOST_DIR`.
+- Nilai yang khusus untuk container (`DATABASE_URL` ke `db`, `QDRANT_CLUSTER_ENDPOINT=http://qdrant:6333`, `DATASET_DIR`, `OUTPUT_DIR`, `DEBUG=false`) diset di `docker-compose.yml` dan mengalahkan `.env` development.
+- Torch di Linux diambil dari index CPU PyTorch (`[tool.uv.sources]` di `pyproject.toml`), sehingga image tidak ikut membawa ±3 GB library CUDA.
 
-### 8.2 Spesifikasi Dockerfile
+### 8.2 Berkas
 
-#### `backend/Dockerfile` (FastAPI + Celery)
-Dependensi dipasang dari `pyproject.toml` + `uv.lock` (sama persis dengan lingkungan development).
-```dockerfile
-# Stage 1: Pasang dependensi dengan uv ke virtualenv /app/.venv
-FROM python:3.12-slim AS backend-builder
-COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /usr/local/bin/uv
-WORKDIR /app
-ENV UV_COMPILE_BYTECODE=1     UV_LINK_MODE=copy
+| Berkas | Isi |
+| :--- | :--- |
+| `backend/Dockerfile`, `backend/docker-entrypoint.sh`, `backend/.dockerignore` | Image backend multi-stage, user non-root `pertamina`, healthcheck `/api/health`. |
+| `frontend/Dockerfile`, `.dockerignore` (root) | Build React lalu salin ke image Nginx; context root hanya mengirim `frontend/` dan `deploy/nginx/`. |
+| `deploy/nginx/default.conf` | Mode **HTTP** (laptop / jaringan lokal, dipakai sekarang). |
+| `deploy/nginx/https.conf` + `compose.https.yml` | Mode **HTTPS**: redirect 80→443, TLS 1.2/1.3, HSTS. Aktif setelah sertifikat diletakkan di `deploy/certs/` (lihat `deploy/certs/README.md`). |
+| `deploy/nginx/snippets/itec-app.conf` | Lokasi bersama: `/` (SPA, `index.html` no-cache), `/assets/` (cache 1 tahun, immutable), `/api/` (timeout 300 s, `proxy_buffering off`, header `X-Real-IP`/`X-Forwarded-*`). |
+| `deploy/nginx/snippets/security-headers.conf` | `nosniff`, `X-Frame-Options: DENY`, Referrer-Policy, CSP, dan HSTS (hanya mode HTTPS). |
+| `docker-compose.yml` | Layanan inti `nginx`, `web`, `db`, `qdrant`. |
+| `compose.dev.yml` | Hanya PostgreSQL untuk development tanpa Docker penuh (tidak berubah). |
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
-
-# Stage 2: Final Production Runtime Image
-FROM python:3.12-slim
-WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1     PATH="/app/.venv/bin:$PATH"
-
-RUN apt-get update && apt-get install -y --no-install-recommends     libpq5     curl     && rm -rf /var/lib/apt/lists/*
-
-# Akun pengguna non-root demi standar keamanan BUMN
-RUN groupadd -r pertamina && useradd -r -g pertamina pertamina
-
-COPY --from=backend-builder /app/.venv /app/.venv
-COPY . .
-RUN mkdir -p /app/media /app/output && chown -R pertamina:pertamina /app
-
-USER pertamina
-EXPOSE 8000
-
-HEALTHCHECK --interval=30s --timeout=5s CMD curl -fs http://localhost:8000/api/health || exit 1
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--proxy-headers", "--forwarded-allow-ips", "*"]
-```
-
-> Catatan: versi image `ghcr.io/astral-sh/uv` sebaiknya disamakan dengan versi uv yang dipakai saat membuat `uv.lock`, dan tambahkan `.dockerignore` berisi `.venv/`, `__pycache__/`, dan `.pytest_cache/` agar virtualenv lokal tidak ikut tersalin.
-
-#### `frontend/Dockerfile` (Build React → Nginx)
-Dibangun dengan *context* root repo agar konfigurasi `deploy/nginx/default.conf` ikut terbawa.
-```dockerfile
-# Stage 1: Build Frontend React dengan Vite
-FROM node:22-alpine AS frontend-builder
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
-# Stage 2: Nginx menyajikan dist/ + reverse proxy
-FROM nginx:1.27-alpine
-COPY deploy/nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
-```
-
-Dengan pemisahan ini, build React hanya terjadi sekali (di image Nginx) dan server produksi tidak memerlukan Node.js maupun folder `frontend/dist` di host.
-
----
-
-### 8.3 Blueprint `docker-compose.yml` (Opsi A: Decoupled Siap Deploy)
-
-```yaml
-services:
-  # 1. Pangkalan Data Relasional
-  db:
-    image: postgres:16-alpine
-    container_name: pertamina_postgres
-    restart: always
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-pertamina_db}
-      POSTGRES_USER: ${POSTGRES_USER:-pertamina_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diisi di .env}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - pertamina_internal_net
-
-  # 2. Qdrant Vector Database (STK 86 Rules)
-  qdrant:
-    image: qdrant/qdrant:v1.12.4
-    container_name: pertamina_qdrant
-    restart: always
-    environment:
-      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY wajib diisi di .env}
-    volumes:
-      - qdrant_storage:/qdrant/storage
-    networks:
-      - pertamina_internal_net
-
-  # 3. FastAPI ASGI Web Application
-  web:
-    image: ghcr.io/<org>/<repo>/web:${IMAGE_TAG:-latest}
-    build:
-      context: ./backend
-    container_name: pertamina_fastapi
-    restart: always
-    volumes:
-      - media_volume:/app/media
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-    networks:
-      - pertamina_internal_net
-
-  # 4. Nginx Edge Gateway & Frontend Server (berisi build React)
-  nginx:
-    image: ghcr.io/<org>/<repo>/nginx:${IMAGE_TAG:-latest}
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: pertamina_nginx
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/certs:/etc/nginx/certs:ro
-    depends_on:
-      - web
-    networks:
-      - pertamina_internal_net
-
-  # --- Layanan opsional: aktifkan dengan `docker compose --profile worker up -d` ---
-
-  # 5. Redis Message Broker
-  redis:
-    image: redis:7-alpine
-    container_name: pertamina_redis
-    restart: always
-    profiles: ["worker"]
-    volumes:
-      - redis_data:/data
-    networks:
-      - pertamina_internal_net
-
-  # 6. Celery Worker (AI & Docx Generation)
-  celery_worker:
-    image: ghcr.io/<org>/<repo>/web:${IMAGE_TAG:-latest}
-    container_name: pertamina_celery
-    restart: always
-    profiles: ["worker"]
-    command: celery -A app.services.tasks worker -l info --concurrency=4
-    volumes:
-      - media_volume:/app/media
-    env_file:
-      - .env
-    depends_on:
-      redis:
-        condition: service_started
-      db:
-        condition: service_healthy
-    networks:
-      - pertamina_internal_net
-
-  # 7. Celery Beat (Penjadwal Housekeeping)
-  celery_beat:
-    image: ghcr.io/<org>/<repo>/web:${IMAGE_TAG:-latest}
-    container_name: pertamina_celery_beat
-    restart: always
-    profiles: ["worker"]
-    command: celery -A app.services.tasks beat -l info
-    env_file:
-      - .env
-    depends_on:
-      - redis
-    networks:
-      - pertamina_internal_net
-
-# Persistensi Data Fisik Server
-volumes:
-  pgdata:
-  redis_data:
-  qdrant_storage:
-  media_volume:
-
-networks:
-  pertamina_internal_net:
-    driver: bridge
-```
-
-Catatan perubahan dibanding draf sebelumnya:
-- Atribut `version:` dihapus (sudah usang di Docker Compose v2).
-- Password database & API key Qdrant **wajib** dari `.env` (sintaks `${VAR:?pesan}` membuat compose gagal bila kosong), tidak ada default seperti `pertamina_pass123`.
-- Healthcheck memakai variabel lingkungan container (`$${POSTGRES_USER}`), tidak di-hardcode.
-- Berkas `media/` **tidak** disajikan langsung oleh Nginx; unduhan `.docx` selalu melewati endpoint FastAPI yang memeriksa login & hak akses.
-
----
-
-### 8.4 Konfigurasi `deploy/nginx/default.conf`
-
-```nginx
-# Redirect HTTP -> HTTPS
-server {
-    listen 80;
-    server_name _;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    http2 on;
-    server_name _;
-
-    ssl_certificate     /etc/nginx/certs/fullchain.pem;
-    ssl_certificate_key /etc/nginx/certs/privkey.pem;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-
-    client_max_body_size 100M;
-    server_tokens off;
-
-    # Header keamanan dasar
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "DENY" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Strict-Transport-Security "max-age=31536000" always;
-    add_header Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'" always;
-
-    # 1. Sajikan Hasil Build React Vite (dist/)
-    location / {
-        root /usr/share/nginx/html;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Aset hasil hashing Vite (nama file berubah setiap build) -> aman di-cache lama
-    location /assets/ {
-        root /usr/share/nginx/html;
-        expires 1y;
-        add_header Cache-Control "public, max-age=31536000, immutable";
-    }
-
-    # 2. Teruskan API Call ke Backend FastAPI
-    location /api/ {
-        proxy_pass http://web:8000/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Pengaturan khusus AI Streaming (SSE) & Dokumen Berat
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_connect_timeout 10s;
-        proxy_buffering off;
-        proxy_cache off;
-    }
-
-    # 3. Swagger (/docs, /openapi.json) TIDAK diekspos di produksi.
-    #    FastAPI hanya mengaktifkannya bila DEBUG=True; untuk akses darurat gunakan
-    #    SSH tunnel ke port 8000 container web.
-}
-```
-
-Catatan: `index.html` sengaja **tidak** di-cache lama agar pengguna selalu mendapat versi terbaru setelah deploy; hanya folder `/assets/` (nama file ber-hash) yang di-cache `immutable`.
-
----
-
-### 8.5 Perintah Operasional Docker (One-Command Startup)
+### 8.3 Perintah Operasional
 
 ```bash
-# 1. Menjalankan ekosistem inti (nginx, web, db, qdrant)
+# 1. Siapkan .env (salin dari .env.example): POSTGRES_PASSWORD, JWT_SECRET, OPENROUTER_API_KEY,
+#    QDRANT_LOCAL_API_KEY, DATASET_HOST_DIR (folder Google Drive/OneDrive di laptop), HTTP_PORT bila 80 terpakai.
 docker compose up -d --build
 
-# 1b. Bila pemrosesan latar belakang sudah dibutuhkan
-docker compose --profile worker up -d
+# 2. Akun admin awal (password dari ADMIN_INITIAL_PASSWORD) & akun lain
+docker compose exec web python -m app.scripts.seed admin
+docker compose exec web python -m app.scripts.seed user --username budi --email budi@contoh.id --nama "Budi" --role FPP
 
-# 2. Menjalankan Migrasi Database di Dalam Kontainer
-docker compose exec web alembic upgrade head
+# 3. Isi knowledge base: buka menu Knowledge Base → "Sinkronkan Sekarang"
+#    (atau POST /api/dataset/sync sebagai ADMIN/PROCUREMENT)
 
-# 3. Membuat akun admin awal & seed 86 aturan STK
-docker compose exec web python -m app.scripts.seed
-
-# 4. Memeriksa Log Status Kontainer
+# 4. Log & status
+docker compose ps
 docker compose logs -f web
+
+# 5. Mode HTTPS (setelah sertifikat ada & COOKIE_SECURE=true di .env)
+docker compose -f docker-compose.yml -f compose.https.yml up -d --build
+
+# Backup database sebelum migrasi besar
+docker compose exec db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql
 ```
+
+Catatan: Qdrant di container masih kosong, berbeda dengan Qdrant Cloud yang dipakai saat development. Isi knowledge base dengan sinkronisasi drive; apakah perlu migrasi data dari Cloud sudah ditanyakan di `pertanyaan penanggung jawab ai.md` E5.
 
 ---
 
@@ -1279,50 +986,15 @@ docker compose logs -f web
 
 ### 9.2 Otomasi Pembersihan Berkas Sementara (*Automated Housekeeping Task*)
 
-Aktivitas penyusunan dokumen tender menghasilkan berkas *scratch*, pecahan halaman PDF, dan draf revisi di folder `output/`. Jika dibiarkan, media penyimpanan server akan penuh (*disk saturation*).
+Generator AI menulis `.docx` ke folder `output/`, termasuk berkas dengan nama yang sama untuk judul yang sama. Bila dibiarkan, disk server akan penuh.
 
-1. **Jadwal Pembersihan Berkala via Celery Beat** (atau cron host bila profil `worker` belum aktif):
-   * Menjadwalkan tugas otomatis yang berjalan setiap hari pukul **02.00 WIB**:
-     ```python
-     # backend/app/services/tasks.py
-     import time
-     from pathlib import Path
-
-     from celery import Celery
-     from celery.schedules import crontab
-
-     from app.config import settings
-
-     celery_app = Celery("pertamina", broker=settings.CELERY_BROKER_URL, backend=settings.CELERY_RESULT_BACKEND)
-     celery_app.conf.timezone = "Asia/Jakarta"
-     celery_app.conf.beat_schedule = {
-         "cleanup-output-harian": {
-             "task": "app.services.tasks.cleanup_expired_temporary_files",
-             "schedule": crontab(hour=2, minute=0),
-         },
-     }
-
-     @celery_app.task
-     def cleanup_expired_temporary_files():
-         """
-         Menghapus berkas sementara di OUTPUT_DIR yang berusia > 7 hari.
-         Mencegah disk kepenuhan dan menjamin kepatuhan retensi data.
-         """
-         temp_dir = Path(settings.OUTPUT_DIR)  # path absolut dari .env, bukan relatif
-         retention_seconds = 7 * 24 * 3600  # 7 Hari
-         now = time.time()
-         deleted_count = 0
-
-         if temp_dir.is_dir():
-             for filepath in temp_dir.rglob("*"):
-                 if filepath.is_file() and now - filepath.stat().st_mtime > retention_seconds:
-                     filepath.unlink(missing_ok=True)
-                     deleted_count += 1
-         return f"Housekeeping selesai: {deleted_count} file kedaluwarsa dibersihkan."
-     ```
-2. **Kepatuhan Privasi Data Pengadaan**:
-   * Berkas sementara yang dihapus otomatis memastikan dokumen acuan vendor tidak tertimbun selamanya di disk server tanpa pengawasan.
-   * Folder `media/` (upload & dokumen terbit) **tidak** ikut dibersihkan otomatis karena terikat pada data proyek dan audit; penghapusannya mengikuti kebijakan retensi arsip pengadaan.
+1. **Implementasi (Fase 4):** `backend/app/services/housekeeping.py` dijalankan sebagai task periodik di *lifespan* FastAPI: sekali saat start, lalu setiap 6 jam. Celery Beat tidak dibutuhkan selama backend berjalan satu proses.
+   * Berkas di `OUTPUT_DIR` yang lebih tua dari `TEMP_RETENTION_DAYS` (default **7 hari**) dihapus.
+   * Folder `output/drafts/` **tidak pernah** dibersihkan. Di sana tersimpan salinan `.docx` milik setiap versi draf (`procurement_document_draft.file_docx_path`) yang terikat pada data paket dan audit.
+   * Dapat dimatikan dengan `HOUSEKEEPING_ENABLED=false` (dipakai saat test).
+2. **Kepatuhan privasi data pengadaan:**
+   * Berkas sementara dihapus otomatis agar dokumen vendor tidak tertimbun di disk tanpa pengawasan.
+   * Berkas acuan (BoQ/RKS) tidak lagi diunggah ke server; sumbernya tetap di folder drive (`DATASET_DIR`, di-mount *read-only*), sehingga retensinya mengikuti kebijakan drive korporat.
 
 ---
 
