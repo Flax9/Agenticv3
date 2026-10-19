@@ -48,18 +48,96 @@
         <span class="step-icon-drawer">📊</span>
       </button>
 
-      <button class="btn-nav" onclick="openKnowledgeBase()" title="Buka Database Vektor Qdrant">
-        🗄️ Knowledge Base
-      </button>
-      <button class="btn-nav" onclick="openRegulasiGuide()">
-        📖 Pedoman PBJ
-      </button>
-      <button class="btn-nav" onclick="resetChatSession()">
-        🔄 Reset
-      </button>
-      <button class="btn-pertamina-red" onclick="downloadWord()">
+      <!-- Tombol Unduh Eksklusif di Luar Hamburger -->
+      <button class="btn-pertamina-red" onclick="downloadWord()" title="Unduh Berkas Word (.DOCX) Resmi">
         📥 Unduh (.DOCX)
       </button>
+
+      <!-- Hamburger Menu Dropdown Wrapper -->
+      <div class="nav-menu-wrapper" id="navMenuWrapper">
+        <button class="btn-hamburger" id="btnHamburger" onclick="toggleNavMenu(event)" title="Buka Menu Navigasi & Tampilan Review">
+          <svg class="hamburger-icon" viewBox="0 0 24 24">
+            <line x1="4" y1="6" x2="20" y2="6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+
+        <!-- Popover Dropdown Menu -->
+        <div class="nav-dropdown-menu" id="navDropdownMenu">
+          <div class="dropdown-header">
+            <span>Kontrol Tampilan & Review</span>
+          </div>
+
+          <!-- Group 1: Review Windows / Canvas Toggle -->
+          <div class="dropdown-group">
+            <div class="dropdown-item" onclick="toggleCanvasVisibility(); closeNavMenu();">
+              <div class="dropdown-item-left">
+                <span class="dropdown-item-icon">📄</span>
+                <div class="dropdown-item-text">
+                  <span class="item-title">Review Dokumen (Canvas)</span>
+                  <span class="item-sub" id="menuCanvasStatus">Sedang Terbuka (Split View)</span>
+                </div>
+              </div>
+              <span class="menu-toggle-indicator on" id="menuCanvasIndicator">ON</span>
+            </div>
+
+            <div class="dropdown-item" onclick="toggleProgressDrawer(); closeNavMenu();">
+              <div class="dropdown-item-left">
+                <span class="dropdown-item-icon">📊</span>
+                <div class="dropdown-item-text">
+                  <span class="item-title">Panel Progres & Konteks</span>
+                  <span class="item-sub">Tahapan Alur & Berkas Sesi</span>
+                </div>
+              </div>
+              <span class="menu-badge-info">Drawer</span>
+            </div>
+          </div>
+
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-header">
+            <span>Referensi & Manajemen</span>
+          </div>
+
+          <!-- Group 2: Knowledge Base & Pedoman PBJ -->
+          <div class="dropdown-group">
+            <div class="dropdown-item" onclick="openKnowledgeBase(); closeNavMenu();">
+              <div class="dropdown-item-left">
+                <span class="dropdown-item-icon">🗄️</span>
+                <div class="dropdown-item-text">
+                  <span class="item-title">Knowledge Base</span>
+                  <span class="item-sub">Qdrant Cloud Vector Database</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="dropdown-item" onclick="openRegulasiGuide(); closeNavMenu();">
+              <div class="dropdown-item-left">
+                <span class="dropdown-item-icon">📖</span>
+                <div class="dropdown-item-text">
+                  <span class="item-title">Pedoman PBJ Pertamina</span>
+                  <span class="item-sub">No. A03-001/PNG200000/2024-S9</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dropdown-divider"></div>
+
+          <!-- Group 3: Reset Session -->
+          <div class="dropdown-group">
+            <div class="dropdown-item danger" onclick="resetChatSession(); closeNavMenu();">
+              <div class="dropdown-item-left">
+                <span class="dropdown-item-icon">🔄</span>
+                <div class="dropdown-item-text">
+                  <span class="item-title" style="color:var(--status-danger);">Reset Sesi Percakapan</span>
+                  <span class="item-sub">Bersihkan percakapan & mulai ulang</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 

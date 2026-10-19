@@ -61,6 +61,16 @@ class CanvasController {
   handleVisibilityToggle(isVisible) {
     const workspace = document.querySelector('.app-workspace');
     if (workspace) workspace.classList.toggle('canvas-hidden', !isVisible);
+
+    const menuStatus = document.getElementById('menuCanvasStatus');
+    const menuIndicator = document.getElementById('menuCanvasIndicator');
+    if (menuStatus) {
+      menuStatus.innerText = isVisible ? 'Sedang Terbuka (Split View)' : 'Tertutup (Fokus Chat)';
+    }
+    if (menuIndicator) {
+      menuIndicator.innerText = isVisible ? 'ON' : 'OFF';
+      menuIndicator.className = isVisible ? 'menu-toggle-indicator on' : 'menu-toggle-indicator off';
+    }
   }
 
   switchTab(tabId, btnElement) {

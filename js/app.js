@@ -40,6 +40,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
+  // Hamburger Popover Dropdown Menu Handlers
+  const navDropdown = document.getElementById('navDropdownMenu');
+
+  window.toggleNavMenu = (e) => {
+    if (e) e.stopPropagation();
+    if (navDropdown) {
+      navDropdown.classList.toggle('open');
+    }
+  };
+
+  window.closeNavMenu = () => {
+    if (navDropdown) {
+      navDropdown.classList.remove('open');
+    }
+  };
+
+  // Close dropdown if clicking outside
+  document.addEventListener('click', (e) => {
+    const wrapper = document.getElementById('navMenuWrapper');
+    if (wrapper && !wrapper.contains(e.target) && navDropdown && navDropdown.classList.contains('open')) {
+      navDropdown.classList.remove('open');
+    }
+  });
+
   // Popup Management: 4-Box Modal inside Chat Window
   const popupOverlay = document.getElementById('chatPopupOverlay');
 
