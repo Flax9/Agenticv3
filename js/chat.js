@@ -226,6 +226,21 @@ class ChatController {
             </div>
           </div>
 
+          <!-- Claude-Style In-Chat Artifact Embed Card -->
+          <div class="chat-artifact-embed">
+            <div class="artifact-embed-left">
+              <div class="artifact-embed-icon">📄</div>
+              <div class="artifact-embed-meta">
+                <span class="artifact-embed-title">Draft Dokumen Tender Balikpapan v2.0</span>
+                <span class="artifact-embed-sub">Naskah Resmi Pertamina · IKPP 40 Poin & Kontrak</span>
+              </div>
+            </div>
+            <div class="artifact-embed-actions">
+              <button class="btn-embed-action primary" onclick="window.switchCanvasTab('previewTab')">Lihat di Canvas ↗</button>
+              <button class="btn-embed-action secondary" onclick="window.downloadWord()">Unduh .DOCX</button>
+            </div>
+          </div>
+
           Silakan tinjau draf pada kanvas sebelah kanan, atau berikan instruksi penyesuaian klausul.
         `;
 
@@ -240,10 +255,39 @@ class ChatController {
         attachment: { name: "Spesifikasi_Teknis_Tangki.pdf", size: "187 KB" }
       });
       setTimeout(() => {
-        this.appendMessage({
-          sender: 'ai',
-          text: `Draf RKS telah disusun berdasarkan referensi KB Qdrant. Terdiri dari <strong>${rks.bab_count} Bab Teknis</strong> lengkap dengan Lembar Pengesahan dan Matriks CSMS. Silakan periksa pada kanvas kanan.`
-        });
+        const rksHtml = `
+          <div class="chat-tool-foldout" onclick="window.toggleToolFold(this)">
+            <div class="tool-foldout-header">
+              <div class="tool-foldout-left">
+                <span class="tool-foldout-icon">⚡</span>
+                <span>RAG Retrieval: Collection <code>rks_kb</code> (Qdrant Cloud)</span>
+              </div>
+              <span class="tool-foldout-chevron">▶</span>
+            </div>
+            <div class="tool-foldout-body">
+              • Mengambil 5 bab standar spesifikasi teknis tangki dan perpipaan.<br>
+              • Standar K3 CSMS Kategori HIGH (Passing grade ≥ 70) disuntikkan pada Bab IV.<br>
+              • 3 dokumen acuan terkait fuel terminal Balikpapan berhasil disinkronisasi.
+            </div>
+          </div>
+
+          Draf RKS telah disusun lengkap sebanyak <strong>${rks.bab_count} Bab Teknis</strong> beserta Lembar Pengesahan dan Matriks CSMS.
+
+          <div class="chat-artifact-embed">
+            <div class="artifact-embed-left">
+              <div class="artifact-embed-icon">📋</div>
+              <div class="artifact-embed-meta">
+                <span class="artifact-embed-title">Spesifikasi Teknis RKS (Bab I - V)</span>
+                <span class="artifact-embed-sub">Dokumen Rencana Kerja & Syarat Siap Cetak</span>
+              </div>
+            </div>
+            <div class="artifact-embed-actions">
+              <button class="btn-embed-action primary" onclick="window.switchCanvasTab('previewTab')">Lihat di Canvas ↗</button>
+              <button class="btn-embed-action secondary" onclick="window.downloadWord()">Unduh .DOCX</button>
+            </div>
+          </div>
+        `;
+        this.appendMessage({ sender: 'ai', text: rksHtml });
       }, 500);
     }
     else if (mode === 'contract') {
@@ -253,10 +297,39 @@ class ChatController {
         text: `Tolong susunkan Rancangan Kontrak Definitif untuk ${c.nama_pekerjaan}. Pemenang tender: ${c.nama_vendor}.`
       });
       setTimeout(() => {
-        this.appendMessage({
-          sender: 'ai',
-          text: `Naskah Kontrak Definitif 20 Pasal telah disusun dengan nilai <strong>${this.state.formatRupiah(c.nilai_kontrak)}</strong> dan durasi <strong>${c.durasi_hari} hari kalender</strong>.`
-        });
+        const contractHtml = `
+          <div class="chat-tool-foldout" onclick="window.toggleToolFold(this)">
+            <div class="tool-foldout-header">
+              <div class="tool-foldout-left">
+                <span class="tool-foldout-icon">⚡</span>
+                <span>Legal Drafting: Standar 20 Pasal Kontrak Pemborongan Mandiri</span>
+              </div>
+              <span class="tool-foldout-chevron">▶</span>
+            </div>
+            <div class="tool-foldout-body">
+              • Pasal 1 s.d. 20 terkompilasi sesuai format hukum korporat Pertamina.<br>
+              • NPWP vendor dan rekening bank terverifikasi.<br>
+              • Denda keterlambatan 1 permil per hari (maks 5%) otomatis diset pada Pasal 14.
+            </div>
+          </div>
+
+          Naskah Kontrak Definitif 20 Pasal telah disusun dengan nilai <strong>${this.state.formatRupiah(c.nilai_kontrak)}</strong> dan durasi <strong>${c.durasi_hari} hari kalender</strong>.
+
+          <div class="chat-artifact-embed">
+            <div class="artifact-embed-left">
+              <div class="artifact-embed-icon">📝</div>
+              <div class="artifact-embed-meta">
+                <span class="artifact-embed-title">Naskah Rancangan Kontrak (20 Pasal)</span>
+                <span class="artifact-embed-sub">Perjanjian Pemborongan Pekerjaan Definitif</span>
+              </div>
+            </div>
+            <div class="artifact-embed-actions">
+              <button class="btn-embed-action primary" onclick="window.switchCanvasTab('previewTab')">Lihat di Canvas ↗</button>
+              <button class="btn-embed-action secondary" onclick="window.downloadWord()">Unduh .DOCX</button>
+            </div>
+          </div>
+        `;
+        this.appendMessage({ sender: 'ai', text: contractHtml });
       }, 500);
     }
     else if (mode === 'amendment') {
@@ -266,10 +339,39 @@ class ChatController {
         text: `Tolong susunkan draf Addendum untuk kontrak ${a.nomor_kontrak_asal} karena ada penambahan nilai dan volume pekerjaan.`
       });
       setTimeout(() => {
-        this.appendMessage({
-          sender: 'ai',
-          text: `Draft Addendum telah dibuat lengkap dengan konsideran Menimbang, Mengingat, Memperhatikan, serta tabel komparasi kondisi lama vs baru.`
-        });
+        const amendHtml = `
+          <div class="chat-tool-foldout" onclick="window.toggleToolFold(this)">
+            <div class="tool-foldout-header">
+              <div class="tool-foldout-left">
+                <span class="tool-foldout-icon">⚡</span>
+                <span>Legal Drafting: Addendum Kontrak & Tabel Komparasi Klausul</span>
+              </div>
+              <span class="tool-foldout-chevron">▶</span>
+            </div>
+            <div class="tool-foldout-body">
+              • Merumuskan konsideran Menimbang, Mengingat, dan Memperhatikan.<br>
+              • Menyusun matriks perubahan nilai kontrak dari ${this.state.formatRupiah(a.nilai_kontrak_asal)} menjadi ${this.state.formatRupiah(a.nilai_kontrak_baru)}.<br>
+              • Menyiapkan pasal peralihan dan keabsahan addendum.
+            </div>
+          </div>
+
+          Draft Addendum telah dibuat lengkap dengan konsideran dan tabel komparasi kondisi lama vs baru.
+
+          <div class="chat-artifact-embed">
+            <div class="artifact-embed-left">
+              <div class="artifact-embed-icon">📎</div>
+              <div class="artifact-embed-meta">
+                <span class="artifact-embed-title">Draft Addendum Kontrak (Lama vs Baru)</span>
+                <span class="artifact-embed-sub">Perubahan Nilai Kontrak (+8%) & Perpanjangan Waktu</span>
+              </div>
+            </div>
+            <div class="artifact-embed-actions">
+              <button class="btn-embed-action primary" onclick="window.switchCanvasTab('previewTab')">Lihat di Canvas ↗</button>
+              <button class="btn-embed-action secondary" onclick="window.downloadWord()">Unduh .DOCX</button>
+            </div>
+          </div>
+        `;
+        this.appendMessage({ sender: 'ai', text: amendHtml });
       }, 500);
     }
   }

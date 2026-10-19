@@ -215,14 +215,126 @@ body {
   transform: translateY(-1px);
 }
 
+/* Claude-Style Step Progress Indicator Button in Topbar */
+.btn-step-progress {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: var(--radius-full);
+  padding: 5px 14px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.btn-step-progress:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.step-pill-badge {
+  background: #0072CE;
+  color: white;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.step-label-sub {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 130px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step-icon-drawer {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
 /* ================================================================
-   3. WORKSPACE CONTAINER (SPLIT SCREEN VIEW)
+   3. WORKSPACE CONTAINER (SPLIT SCREEN VIEW & RESPONSIVE MODES)
    ================================================================ */
 .app-workspace {
   display: flex;
   flex: 1;
   height: calc(100vh - 64px);
   overflow: hidden;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* State: Canvas Fullscreen */
+.app-workspace.canvas-fullscreen .chat-panel {
+  display: none !important;
+}
+
+.app-workspace.canvas-fullscreen .canvas-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* State: Canvas Hidden (Focus Mode on Chat) */
+.app-workspace.canvas-hidden .canvas-panel {
+  display: none !important;
+}
+
+.app-workspace.canvas-hidden .chat-panel {
+  width: 100% !important;
+  max-width: 900px;
+  margin: 0 auto;
+  border-right: none;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.05);
+}
+
+.btn-restore-canvas {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 28px;
+  background: var(--pertamina-navy);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 45, 98, 0.35);
+  z-index: 99;
+  align-items: center;
+  gap: 8px;
+  transition: var(--transition-fast);
+}
+
+.app-workspace.canvas-hidden ~ .btn-restore-canvas,
+.canvas-hidden-active .btn-restore-canvas {
+  display: flex;
+}
+
+.btn-restore-canvas:hover {
+  background: var(--pertamina-navy-light);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 45, 98, 0.45);
+}
+
+.badge-restore {
+  background: #10B981;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
 }
 
 /* Utility Helpers */

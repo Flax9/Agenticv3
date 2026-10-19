@@ -22,6 +22,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   window.switchCanvasTab = (tabId, btn) => canvasCtrl.switchTab(tabId, btn);
   window.downloadWord = () => canvasCtrl.triggerDownloadDocx();
+  window.copyCanvasContent = () => canvasCtrl.copyCanvasContent();
+  window.toggleProgressDrawer = (force) => window.appState.toggleDrawer(force);
+  window.toggleCanvasFullscreen = (force) => window.appState.toggleCanvasFullscreen(force);
+  window.toggleCanvasVisibility = (force) => window.appState.toggleCanvasVisibility(force);
+
+  window.toggleToolFold = (el) => {
+    if (el) el.classList.toggle('open');
+  };
 
   window.toggleReasoning = (el) => {
     const details = el.nextElementSibling;

@@ -21,12 +21,46 @@ class CanvasController {
     this.state.subscribe((currentState, changedKey, payload) => {
       if (changedKey === 'modeChange' || changedKey === 'activeCanvasTab') {
         this.renderCanvas();
+        this.renderDrawer();
+        this.updateNavStep();
+      } else if (changedKey === 'stepChange') {
+        this.updateNavStep();
+        this.renderDrawer();
       } else if (changedKey === 'packageData') {
         this.handleFieldUpdate(payload);
+      } else if (changedKey === 'drawerChange') {
+        this.handleDrawerToggle(payload);
+      } else if (changedKey === 'fullscreenChange') {
+        this.handleFullscreenToggle(payload);
+      } else if (changedKey === 'visibilityChange') {
+        this.handleVisibilityToggle(payload);
       }
     });
 
     this.renderCanvas();
+    this.renderDrawer();
+    this.updateNavStep();
+  }
+
+  handleDrawerToggle(isOpen) {
+    const drawer = document.getElementById('progressDrawer');
+    const backdrop = document.getElementById('drawerBackdrop');
+    if (drawer) drawer.classList.toggle('open', isOpen);
+    if (backdrop) backdrop.classList.toggle('open', isOpen);
+  }
+
+  handleFullscreenToggle(isFullscreen) {
+    const workspace = document.querySelector('.app-workspace');
+    const btn = document.getElementById('btnFullscreen');
+    if (workspace) workspace.classList.toggle('canvas-fullscreen', isFullscreen);
+    if (btn) {
+      btn.innerHTML = isFullscreen ? '<span class="tool-icon">⛶</span> Keluar Penuh' : '<span class="tool-icon">⛶</span> Penuh';
+    }
+  }
+
+  handleVisibilityToggle(isVisible) {
+    const workspace = document.querySelector('.app-workspace');
+    if (workspace) workspace.classList.toggle('canvas-hidden', !isVisible);
   }
 
   switchTab(tabId, btnElement) {
@@ -35,14 +69,138 @@ class CanvasController {
 
     const targetTab = document.getElementById(tabId);
     if (targetTab) targetTab.classList.add('active');
-    if (btnElement) btnElement.classList.add('active');
+
+    // Also activate matching button if not passed directly
+    if (btnElement) {
+      btnElement.classList.add('active');
+    } else {
+      const matchingBtn = document.querySelector(`.tab-pill[data-tab="${tabId}"]`);
+      if (matchingBtn) matchingBtn.classList.add('active');
+    }
 
     this.state.state.activeCanvasTab = tabId;
+  }
+
+  copyCanvasContent() {
+    const activeTab = document.querySelector('.tab-view.active');
+    const btn = document.getElementById('btnCopyCanvas');
+    if (!activeTab) return;
+
+    const text = activeTab.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      if (btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="tool-icon">✓</span> Tersalin!';
+        btn.style.color = '#10B981';
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+          btn.style.color = '';
+        }, 2000);
+      }
+    }).catch(err => {
+      console.warn("Clipboard write failed:", err);
+      alert("Naskah telah disiapkan untuk disalin.");
+    });
+  }
+
+  updateNavStep() {
+    const mode = this.state.state.currentMode;
+    const meta = this.state.modeMeta[mode];
+    const steps = meta ? meta.stepper : ["Tahap 1", "Tahap 2", "Tahap 3", "Tahap 4"];
+    const currentStep = this.state.state.currentStep || 1;
+    const totalStep = steps.length;
+
+    const curEl = document.getElementById('navStepCurrent');
+    const totEl = document.getElementById('navStepTotal');
+    const labelEl = document.getElementById('navStepLabel');
+
+    if (curEl) curEl.innerText = `${currentStep}`;
+    if (totEl) totEl.innerText = `${totalStep}`;
+    if (labelEl && steps[currentStep - 1]) labelEl.innerText = steps[currentStep - 1];
+
+    const stageBadge = document.getElementById('drawerStageProgressBadge');
+    if (stageBadge) stageBadge.innerText = `Tahap ${currentStep} dari ${totalStep}`;
+  }
+
+  renderDrawer() {
+    const mode = this.state.state.currentMode;
+    const meta = this.state.modeMeta[mode];
+    const steps = meta ? meta.stepper : ["Tahap 1", "Tahap 2", "Tahap 3", "Tahap 4"];
+    const currentStep = this.state.state.currentStep || 1;
+
+    // 1. Render Stages List in Drawer
+    const stageList = document.getElementById('drawerStageList');
+    if (stageList) {
+      stageList.innerHTML = steps.map((stepText, idx) => {
+        const stepNum = idx + 1;
+        let statusClass = '';
+        let numIcon = `${stepNum}`;
+
+        if (stepNum < currentStep) {
+          statusClass = 'completed';
+          numIcon = '✓';
+        } else if (stepNum === currentStep) {
+          statusClass = 'active';
+        }
+
+        return `
+          <div class="stage-drawer-item ${statusClass}">
+            <div class="stage-drawer-num">${numIcon}</div>
+            <div class="stage-drawer-info">
+              <span class="stage-drawer-title">${stepText}</span>
+              <span class="stage-drawer-desc">${statusClass === 'completed' ? 'Selesai diverifikasi' : (statusClass === 'active' ? 'Sedang aktif diproses' : 'Tahapan selanjutnya')}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 2. Render Outputs in Drawer
+    const outputContainer = document.getElementById('drawerOutputsContainer');
+    const outputBadge = document.getElementById('drawerOutputCountBadge');
+    const artifacts = (this.state.state.artifacts && this.state.state.artifacts[mode]) || [];
+
+    if (outputBadge) outputBadge.innerText = `${artifacts.length} Berkas Siap`;
+    if (outputContainer) {
+      outputContainer.innerHTML = artifacts.map(art => `
+        <div class="drawer-output-card" onclick="window.switchCanvasTab('${art.id}')">
+          <div class="drawer-output-left">
+            <div class="drawer-output-icon">📄</div>
+            <div class="drawer-output-meta">
+              <span class="drawer-output-title">${art.title}</span>
+              <span class="drawer-output-sub">${art.desc} · <strong style="color:var(--pertamina-blue)">${art.format}</strong></span>
+            </div>
+          </div>
+          <button class="btn-open-output">Lihat ↗</button>
+        </div>
+      `).join('');
+    }
+
+    // 3. Render Session Resources in Drawer
+    const resContainer = document.getElementById('drawerResourcesContainer');
+    const resources = this.state.state.sessionResources || [];
+    if (resContainer) {
+      resContainer.innerHTML = resources.map(res => `
+        <div class="resource-item">
+          <span class="resource-icon">${res.icon || '📌'}</span>
+          <div class="resource-info">
+            <span class="resource-name" title="${res.name}">${res.name}</span>
+            <span class="resource-type">${res.meta}</span>
+          </div>
+        </div>
+      `).join('');
+    }
   }
 
   renderCanvas() {
     const mode = this.state.state.currentMode;
     const tab = this.state.state.activeCanvasTab;
+
+    // Update canvas topbar document title
+    const canvasDocTitle = document.getElementById('canvasDocTitle');
+    if (canvasDocTitle && this.state.modeMeta[mode]) {
+      canvasDocTitle.innerText = this.state.modeMeta[mode].title;
+    }
 
     // Update tab bar visibility
     const previewTabBtn = document.querySelector('.tab-pill[data-tab="previewTab"]');

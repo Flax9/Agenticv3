@@ -41,6 +41,13 @@
     </div>
 
     <div class="nav-actions">
+      <!-- Claude-Style Step Progress Indicator Button -->
+      <button class="btn-step-progress" id="btnStepProgress" onclick="toggleProgressDrawer()" title="Buka Progres & Konteks Sesi (Workflow / Outputs)">
+        <span class="step-pill-badge">Step <strong id="navStepCurrent">1</strong> of <span id="navStepTotal">4</span></span>
+        <span class="step-label-sub" id="navStepLabel">Upload BOQ / RKS</span>
+        <span class="step-icon-drawer">📊</span>
+      </button>
+
       <button class="btn-nav" onclick="openKnowledgeBase()" title="Buka Database Vektor Qdrant">
         🗄️ Knowledge Base
       </button>
@@ -48,7 +55,7 @@
         📖 Pedoman PBJ
       </button>
       <button class="btn-nav" onclick="resetChatSession()">
-        🔄 Reset Sesi
+        🔄 Reset
       </button>
       <button class="btn-pertamina-red" onclick="downloadWord()">
         📥 Unduh (.DOCX)
@@ -158,23 +165,40 @@
          ────────────────────────────────────────────────────────────── -->
     <section class="canvas-panel" id="canvasPanel">
 
-      <!-- Canvas Top Bar with View Switcher -->
+      <!-- Canvas Top Bar with Claude-Style Artifact Header & Toolbar -->
       <div class="canvas-topbar">
+        <div class="canvas-header-meta">
+          <div class="doc-icon-badge">📄</div>
+          <div class="doc-title-text-wrap">
+            <span class="doc-active-title" id="canvasDocTitle">Dokumen Tender (IKPP & Kontrak)</span>
+            <span class="doc-sync-status"><span class="sync-dot"></span> Live Bi-directional Sync</span>
+          </div>
+        </div>
+
         <div class="tab-pills">
           <button class="tab-pill active" data-tab="previewTab" onclick="switchCanvasTab('previewTab', this)">
-            📄 Pratinjau Dokumen (.DOCX)
+            📄 Naskah Dokumen
           </button>
           <button class="tab-pill" data-tab="matrixTab" onclick="switchCanvasTab('matrixTab', this)">
             📊 Matriks HPS & TKDN
           </button>
           <button class="tab-pill" data-tab="checklistTab" onclick="switchCanvasTab('checklistTab', this)">
-            ✅ Checklist STK Mandatory (86 Butir)
+            ✅ Checklist STK (86 Poin)
           </button>
         </div>
 
         <div class="canvas-actions">
-          <button class="btn-download-docx" onclick="downloadWord()">
+          <button class="btn-tool-action" onclick="copyCanvasContent()" id="btnCopyCanvas" title="Salin Isi Naskah ke Clipboard">
+            <span class="tool-icon">📋</span> Salin
+          </button>
+          <button class="btn-tool-action" onclick="toggleCanvasFullscreen()" id="btnFullscreen" title="Layar Penuh (Maximize)">
+            <span class="tool-icon">⛶</span> Penuh
+          </button>
+          <button class="btn-download-docx" onclick="downloadWord()" title="Unduh File Word Resmi">
             📥 Unduh .DOCX
+          </button>
+          <button class="btn-tool-icon-close" onclick="toggleCanvasVisibility()" title="Sembunyikan Canvas (Fokus Chat)">
+            ✕
           </button>
         </div>
       </div>
@@ -344,6 +368,62 @@
     </section>
 
   </main>
+
+  <!-- ================================================================
+       CLAUDE-STYLE PROGRESS & CONTEXT DRAWER (SLIDE-OUT RIGHT PANEL)
+       ================================================================ -->
+  <aside class="progress-drawer" id="progressDrawer">
+    <div class="drawer-header">
+      <div class="drawer-header-title">
+        <h3>Progres & Konteks Sesi</h3>
+        <span>Pelacakan Tahapan Alur Kerja Dokumen</span>
+      </div>
+      <button class="btn-close-drawer" onclick="toggleProgressDrawer()" title="Tutup Panel Progres">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- Section 1: Progress Tracker (Tahap 1 s/d 4) -->
+      <div class="drawer-section">
+        <div class="drawer-section-header">
+          <span class="drawer-section-title">PROGRESS TAHAPAN</span>
+          <span class="drawer-stage-badge" id="drawerStageProgressBadge">Tahap 1 dari 4</span>
+        </div>
+        <div class="progress-stage-list" id="drawerStageList">
+          <!-- Rendered dynamically by canvas.js -->
+        </div>
+      </div>
+
+      <!-- Section 2: Outputs (Generated Artifacts) -->
+      <div class="drawer-section">
+        <div class="drawer-section-header">
+          <span class="drawer-section-title">OUTPUT DOKUMEN (OUTPUTS)</span>
+          <span class="badge-count" id="drawerOutputCountBadge">2 Berkas Siap</span>
+        </div>
+        <div class="drawer-outputs-container" id="drawerOutputsContainer">
+          <!-- Rendered dynamically by canvas.js -->
+        </div>
+      </div>
+
+      <!-- Section 3: Used In This Session (References & DB) -->
+      <div class="drawer-section">
+        <div class="drawer-section-header">
+          <span class="drawer-section-title">SUMBER DATA (USED IN THIS SESSION)</span>
+        </div>
+        <div class="drawer-resources-container" id="drawerResourcesContainer">
+          <!-- Rendered dynamically by canvas.js -->
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Drawer Backdrop Overlay -->
+  <div class="drawer-backdrop" id="drawerBackdrop" onclick="toggleProgressDrawer()"></div>
+
+  <!-- Floating Restore Canvas Button (visible when canvas is hidden) -->
+  <button class="btn-restore-canvas" id="btnRestoreCanvas" onclick="toggleCanvasVisibility()" title="Buka Pratinjau Dokumen Canvas">
+    <span>📄 Buka Live Canvas</span>
+    <span class="badge-restore">Bi-sync</span>
+  </button>
 
   <!-- Modular Reactive Scripts -->
   <script src="js/state.js"></script>

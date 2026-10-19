@@ -679,3 +679,193 @@
   color: var(--text-subtle);
   padding: 0 4px;
 }
+
+/* ================================================================
+   6. CLAUDE-STYLE IN-CHAT ARTIFACT EMBED & TOOL EXECUTION CARDS
+   ================================================================ */
+/* A. In-Chat Artifact Embed Card (Reference: Claude Docs Card) */
+.chat-artifact-embed {
+  margin-top: 10px;
+  background: #F8FAFD;
+  border: 1.5px solid #D0E1F4;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 2px 6px rgba(0, 45, 98, 0.05);
+  transition: var(--transition-fast);
+}
+
+.chat-artifact-embed:hover {
+  border-color: var(--pertamina-blue);
+  background: #FFFFFF;
+  box-shadow: 0 6px 16px rgba(0, 114, 206, 0.1);
+}
+
+.artifact-embed-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.artifact-embed-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: #EFF6FF;
+  color: var(--pertamina-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border: 1px solid #BFDBFE;
+  flex-shrink: 0;
+}
+
+.artifact-embed-meta {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.artifact-embed-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pertamina-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.artifact-embed-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.artifact-embed-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-embed-action {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  border: none;
+}
+
+.btn-embed-action.primary {
+  background: var(--pertamina-blue);
+  color: white;
+}
+
+.btn-embed-action.primary:hover {
+  background: #005FA8;
+  transform: translateY(-1px);
+}
+
+.btn-embed-action.secondary {
+  background: #F1F5F9;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-embed-action.secondary:hover {
+  background: #E2E8F0;
+  color: var(--pertamina-navy);
+}
+
+/* B. Claude-Style Collapsible Tool / Thinking Foldout */
+.chat-tool-foldout {
+  margin-bottom: 8px;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  background: #FAFCFE;
+  overflow: hidden;
+}
+
+.tool-foldout-header {
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  user-select: none;
+  background: #F8FAFD;
+  transition: var(--transition-fast);
+}
+
+.tool-foldout-header:hover {
+  background: #F1F5F9;
+  color: var(--pertamina-navy);
+}
+
+.tool-foldout-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-foldout-icon {
+  font-size: 12px;
+  color: var(--pertamina-blue);
+}
+
+.tool-foldout-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.chat-tool-foldout.open .tool-foldout-chevron {
+  transform: rotate(90deg);
+}
+
+.tool-foldout-body {
+  display: none;
+  padding: 10px 14px;
+  background: white;
+  border-top: 1px solid #E2E8F0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.chat-tool-foldout.open .tool-foldout-body {
+  display: block;
+}
+
+/* C. Markdown Tables in Chat Bubbles */
+.message-bubble table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 12px;
+}
+
+.message-bubble table th {
+  background: #F1F5F9;
+  color: var(--pertamina-navy);
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  font-weight: 700;
+  text-align: left;
+}
+
+.message-bubble table td {
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}

@@ -51,6 +51,39 @@ class AppStateManager {
       isSessionStarted: false,
       apiBaseUrl: "http://127.0.0.1:8000",
 
+      // Claude Workspace & Drawer State
+      isDrawerOpen: false,
+      isCanvasFullscreen: false,
+      isCanvasVisible: true,
+
+      // Session Resources (Used In This Session)
+      sessionResources: [
+        { type: "upload", icon: "📄", name: "BoQ_Overhaul_Tangki_Balikpapan.pdf", meta: "245 KB · 45 Item Terdeteksi" },
+        { type: "qdrant", icon: "🗄️", name: "Qdrant Cloud: tender_kb & rks_kb", meta: "Vector DB Pedoman PBJ A03-001/2024" },
+        { type: "stk", icon: "📋", name: "STK Regional Kalimantan", meta: "86 Butir Checklist Mandatory Pra-Tender" }
+      ],
+
+      // Generated Document Artifacts per Mode
+      artifacts: {
+        tender: [
+          { id: "previewTab", title: "Dokumen Tender Versi 2.0 (IKPP & Kontrak)", format: ".docx", desc: "40 Poin Ketentuan Khusus & Kontrak" },
+          { id: "matrixTab", title: "Matriks HPS, K&R & Komposisi TKDN", format: "Sheet", desc: "Kalkulasi Prime Cost + K&R (8%)" },
+          { id: "checklistTab", title: "Checklist STK Mandatory (86 Butir)", format: "Matrix", desc: "Kepatuhan Pra-Tender Regional" }
+        ],
+        rks: [
+          { id: "previewTab", title: "Spesifikasi Teknis RKS (Bab I - V)", format: ".docx", desc: "Naskah 5 Bab Spesifikasi Teknis & K3" }
+        ],
+        contract: [
+          { id: "previewTab", title: "Naskah Rancangan Kontrak (20 Pasal)", format: ".docx", desc: "Perjanjian Definitif Korporat Pertamina" }
+        ],
+        amendment: [
+          { id: "previewTab", title: "Draft Addendum Kontrak (Lama vs Baru)", format: ".docx", desc: "Konsideran Hukum & Komparasi Klausul" }
+        ],
+        kb: [
+          { id: "previewTab", title: "Indeks Koleksi Qdrant Cloud", format: "Vector DB", desc: "Knowledge Base Regulasi Pengadaan" }
+        ]
+      },
+
       // Tender Package Data
       tenderData: {
         nama_pengadaan: "Pekerjaan Overhaul Tangki 41T-313 Fuel Terminal Balikpapan",
@@ -177,6 +210,21 @@ class AppStateManager {
     } catch (e) {
       return "Rp " + num;
     }
+  }
+
+  toggleDrawer(forceState) {
+    this.state.isDrawerOpen = typeof forceState === 'boolean' ? forceState : !this.state.isDrawerOpen;
+    this.notify('drawerChange', this.state.isDrawerOpen);
+  }
+
+  toggleCanvasFullscreen(forceState) {
+    this.state.isCanvasFullscreen = typeof forceState === 'boolean' ? forceState : !this.state.isCanvasFullscreen;
+    this.notify('fullscreenChange', this.state.isCanvasFullscreen);
+  }
+
+  toggleCanvasVisibility(forceState) {
+    this.state.isCanvasVisible = typeof forceState === 'boolean' ? forceState : !this.state.isCanvasVisible;
+    this.notify('visibilityChange', this.state.isCanvasVisible);
   }
 }
 
