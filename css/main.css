@@ -1,0 +1,237 @@
+/* ================================================================
+   1. DESIGN SYSTEM & CSS VARIABLES (PERTAMINA CORPORATE PALETTE)
+   ================================================================ */
+:root {
+  /* Pertamina Core Corporate Colors */
+  --pertamina-navy: #002D62;
+  --pertamina-navy-dark: #001A3D;
+  --pertamina-navy-light: #0A3C7E;
+  --pertamina-red: #ED1B24;
+  --pertamina-red-hover: #D01018;
+  --pertamina-blue: #0072CE;
+  --pertamina-blue-light: #EBF3FA;
+  --pertamina-green: #00A651;
+
+  /* Surfaces & Backgrounds */
+  --bg-app: #F1F5F9;
+  --bg-canvas: #E2E8F0;
+  --bg-surface: #FFFFFF;
+  --bg-surface-alt: #F8FAFD;
+  --border-color: #E2E8F0;
+  --border-subtle: #CBD5E1;
+  --border-focus: #0072CE;
+
+  /* Text Colors */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+  --text-subtle: #94A3B8;
+  --text-white: #FFFFFF;
+
+  /* Status Colors */
+  --status-success: #10B981;
+  --status-success-bg: #ECFDF5;
+  --status-warning: #F59E0B;
+  --status-warning-bg: #FFFBEB;
+  --status-danger: #EF4444;
+  --status-danger-bg: #FEF2F2;
+  --status-info: #3B82F6;
+  --status-info-bg: #EFF6FF;
+
+  /* Spacing & Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 45, 98, 0.08);
+  --shadow-lg: 0 10px 25px rgba(0, 45, 98, 0.12);
+  --shadow-sheet: 0 8px 30px rgba(0, 0, 0, 0.1);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ================================================================
+   2. TOP APPLICATION NAVBAR
+   ================================================================ */
+.app-navbar {
+  background-color: var(--pertamina-navy);
+  color: var(--text-white);
+  height: 64px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--pertamina-red);
+  flex-shrink: 0;
+  z-index: 50;
+  box-shadow: var(--shadow-md);
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pertamina-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+}
+
+.pertamina-logo-mark {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, var(--pertamina-red) 30%, var(--pertamina-blue) 30% 70%, var(--pertamina-green) 70%);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.brand-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.brand-title {
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--text-white);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Document Mode Picker in Navbar */
+.nav-center-selector {
+  display: flex;
+  align-items: center;
+}
+
+.btn-active-doc-picker {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-full);
+  padding: 6px 16px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.btn-active-doc-picker:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.badge-change-doc {
+  font-size: 10.5px;
+  font-weight: 700;
+  background: var(--pertamina-red);
+  color: white;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.3px;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-nav {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: var(--text-white);
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition-fast);
+}
+
+.btn-nav:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.btn-pertamina-red {
+  background: var(--pertamina-red);
+  color: white;
+  border: none;
+  padding: 8px 18px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: var(--transition-fast);
+  box-shadow: 0 2px 6px rgba(237, 27, 36, 0.3);
+}
+
+.btn-pertamina-red:hover {
+  background: var(--pertamina-red-hover);
+  transform: translateY(-1px);
+}
+
+/* ================================================================
+   3. WORKSPACE CONTAINER (SPLIT SCREEN VIEW)
+   ================================================================ */
+.app-workspace {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+/* Utility Helpers */
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.icon {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}

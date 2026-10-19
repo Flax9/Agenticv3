@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pertamina Procurement AI Copilot (agenticv3)</title>
+  
+  <!-- Modern Typography (Plus Jakarta Sans & JetBrains Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Modular Stylesheets -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/chat.css">
+  <link rel="stylesheet" href="css/canvas.css">
+</head>
+<body>
+
+  <!-- ================================================================
+       TOP APPLICATION NAVBAR
+       ================================================================ -->
+  <header class="app-navbar">
+    <div class="brand-section">
+      <div class="pertamina-badge">
+        <span class="pertamina-logo-mark"></span>
+        <span>PERTAMINA</span>
+      </div>
+      <div class="brand-divider"></div>
+      <div class="brand-title">
+        <span>Procurement AI Copilot</span>
+      </div>
+    </div>
+
+    <!-- Active Document Mode Pill & Quick Switcher Button -->
+    <div class="nav-center-selector">
+      <button class="btn-active-doc-picker" onclick="openDocPopup()" id="activeDocPickerBtn" title="Klik untuk mengganti jenis dokumen">
+        <span id="activeDocTitle">📄 Dokumen Tender (IKPP & Kontrak)</span>
+        <span class="badge-change-doc">Ganti ▾</span>
+      </button>
+    </div>
+
+    <div class="nav-actions">
+      <button class="btn-nav" onclick="openKnowledgeBase()" title="Buka Database Vektor Qdrant">
+        🗄️ Knowledge Base
+      </button>
+      <button class="btn-nav" onclick="openRegulasiGuide()">
+        📖 Pedoman PBJ
+      </button>
+      <button class="btn-nav" onclick="resetChatSession()">
+        🔄 Reset Sesi
+      </button>
+      <button class="btn-pertamina-red" onclick="downloadWord()">
+        📥 Unduh (.DOCX)
+      </button>
+    </div>
+  </header>
+
+  <!-- ================================================================
+       MAIN SPLIT-SCREEN WORKSPACE
+       ================================================================ -->
+  <main class="app-workspace">
+
+    <!-- ──────────────────────────────────────────────────────────────
+         LEFT PANE: INTELLIGENT CHATBOT COPILOT
+         ────────────────────────────────────────────────────────────── -->
+    <section class="chat-panel" id="chatPanel">
+
+      <!-- ==========================================================
+           4-BOX POPUP MODAL (PILIHAN DOKUMEN SAAT PERTAMA KALI MASUK)
+           ========================================================== -->
+      <div class="chat-popup-overlay" id="chatPopupOverlay">
+        <div class="chat-popup-modal">
+          <div class="popup-modal-header">
+            <div class="popup-header-title">
+              <h3>Pilih Jenis Dokumen Pengadaan</h3>
+              <span>Pedoman PBJ No. A03-001/PNG200000/2024-S9</span>
+            </div>
+            <button class="btn-close-popup" onclick="closeDocPopup()" title="Tutup Pop-up">✕</button>
+          </div>
+          <div class="popup-modal-body">
+            <p class="popup-intro-text">
+              Silakan pilih paket dokumen yang ingin Anda susun. Sistem AI akan memuat alur kerja dan format klausul hukum yang sesuai:
+            </p>
+
+            <!-- 4 Kotak Pilihan Dokumen -->
+            <div class="doc-selection-grid">
+              
+              <!-- Kotak 1: Dokumen Tender -->
+              <div class="doc-choice-card selected" onclick="selectDocumentChoice('tender')" id="choice-tender">
+                <div class="choice-icon-wrap">📄</div>
+                <div class="choice-title">Dokumen Tender Lengkap</div>
+                <div class="choice-desc">Paket resmi IKPP 40 Poin, Lampiran 1A–8, dan Bagian B Kontrak.</div>
+                <span class="choice-tag">Versi 2.0</span>
+              </div>
+
+              <!-- Kotak 2: Dokumen RKS -->
+              <div class="doc-choice-card" onclick="selectDocumentChoice('rks')" id="choice-rks">
+                <div class="choice-icon-wrap">📋</div>
+                <div class="choice-title">Dokumen RKS</div>
+                <div class="choice-desc">Rencana Kerja & Syarat teknis, spesifikasi material, & K3 CSMS.</div>
+                <span class="choice-tag">5 Bab Teknis</span>
+              </div>
+
+              <!-- Kotak 3: Kontrak Definitif -->
+              <div class="doc-choice-card" onclick="selectDocumentChoice('contract')" id="choice-contract">
+                <div class="choice-icon-wrap">📝</div>
+                <div class="choice-title">Kontrak Definitif</div>
+                <div class="choice-desc">Perjanjian pemborongan pekerjaan mandiri 20 pasal definitif siap cetak.</div>
+                <span class="choice-tag">20 Pasal Standar</span>
+              </div>
+
+              <!-- Kotak 4: Draft Amendemen -->
+              <div class="doc-choice-card" onclick="selectDocumentChoice('amendment')" id="choice-amendment">
+                <div class="choice-icon-wrap">📎</div>
+                <div class="choice-title">Draft Amendemen</div>
+                <div class="choice-desc">Addendum perubahan nilai/waktu dengan tabel komparasi lama vs baru.</div>
+                <span class="choice-tag">Legal Drafting</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guided Workflow Stepper Bar (Rendered Dynamically by chat.js) -->
+      <div class="workflow-stepper" id="workflowStepper"></div>
+
+      <!-- Chat Stream (Populated Dynamically by chat.js from state) -->
+      <div class="chat-stream" id="chatStream"></div>
+
+      <!-- Quick Action Suggestion Chips (Tailored to current mode) -->
+      <div class="quick-chips-wrapper" id="quickChipsWrapper"></div>
+
+      <!-- Chat Input Area -->
+      <div class="chat-input-container">
+        <input type="file" id="hiddenFileInput" style="display:none;" accept=".pdf,.xlsx,.xls" onchange="handleFileSelected(event)">
+        
+        <div class="input-box-wrapper">
+          <button class="btn-attach" title="Unggah berkas BOQ / TOR PDF" onclick="triggerFileUpload()">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5V6H9v9.5a3 3 0 0 0 6 0V5a4 4 0 0 0-8 0v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
+          </button>
+          <input type="text" id="userInput" class="chat-text-input" placeholder="Ketik instruksi revisi klausul atau pertanyaan...">
+          <button class="btn-send" onclick="sendUserMessage()" title="Kirim Pesan">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+        </div>
+        <div class="input-caption">
+          <span>Tekan <strong>Enter</strong> untuk mengirim instruksi</span>
+          <span>⚡ Backend: FastAPI Port 8000 | OpenRouter Qwen 3.7</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ──────────────────────────────────────────────────────────────
+         RIGHT PANE: LIVE DYNAMIC DOCUMENT CANVAS & CHECKLIST
+         ────────────────────────────────────────────────────────────── -->
+    <section class="canvas-panel" id="canvasPanel">
+
+      <!-- Canvas Top Bar with View Switcher -->
+      <div class="canvas-topbar">
+        <div class="tab-pills">
+          <button class="tab-pill active" data-tab="previewTab" onclick="switchCanvasTab('previewTab', this)">
+            📄 Pratinjau Dokumen (.DOCX)
+          </button>
+          <button class="tab-pill" data-tab="matrixTab" onclick="switchCanvasTab('matrixTab', this)">
+            📊 Matriks HPS & TKDN
+          </button>
+          <button class="tab-pill" data-tab="checklistTab" onclick="switchCanvasTab('checklistTab', this)">
+            ✅ Checklist STK Mandatory (86 Butir)
+          </button>
+        </div>
+
+        <div class="canvas-actions">
+          <button class="btn-download-docx" onclick="downloadWord()">
+            📥 Unduh .DOCX
+          </button>
+        </div>
+      </div>
+
+      <!-- Canvas Scrollable Body -->
+      <div class="canvas-body" id="canvasBody">
+
+        <!-- TAB 1: DYNAMIC DOCUMENT PREVIEW (Rendered by canvas.js per mode) -->
+        <div class="tab-view active" id="previewTab"></div>
+
+        <!-- TAB 2: PARAMETER MATRIX & HPS BREAKDOWN -->
+        <div class="tab-view" id="matrixTab">
+          <div class="matrix-card">
+            <div class="matrix-card-title">
+              <span>Rincian Kalkulasi Harga Perkiraan Sendiri (HPS/OE)</span>
+              <span class="badge-source">TKI C3.2.3-01 Lampiran 3</span>
+            </div>
+
+            <div class="kpi-row">
+              <div class="kpi-box">
+                <div class="kpi-label">Prime Cost (HPS Riil FPP)</div>
+                <div class="kpi-val" id="matrixPrimeCost">Rp 13.283.434.534</div>
+              </div>
+              <div class="kpi-box">
+                <div class="kpi-label">Keuntungan & Risiko (8%)</div>
+                <div class="kpi-val" id="matrixKR" style="color:#D97706;">Rp 1.062.665.466</div>
+              </div>
+              <div class="kpi-box">
+                <div class="kpi-label">Total HPS Pembulatan</div>
+                <div class="kpi-val" id="matrixTotalHPS" style="color:var(--status-success);">Rp 14.346.100.000</div>
+              </div>
+            </div>
+
+            <table class="doc-table">
+              <thead>
+                <tr>
+                  <th>No</th>
+                  <th>Uraian Elemen Biaya</th>
+                  <th>Volume</th>
+                  <th>Satuan</th>
+                  <th>Harga Satuan (IDR)</th>
+                  <th>Total Biaya (IDR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>Mobilisasi & Demobilisasi Peralatan Hydrotest</td>
+                  <td>1.0</td>
+                  <td>Lot</td>
+                  <td>350.000.000</td>
+                  <td>350.000.000</td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>Penggantian Plat Tangki Baja ASTM A36 12mm</td>
+                  <td>45.0</td>
+                  <td>Ton</td>
+                  <td>32.000.000</td>
+                  <td>1.440.000.000</td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>Blasting & Protective Internal Coating Epoxy</td>
+                  <td>3.200.0</td>
+                  <td>m²</td>
+                  <td>420.000</td>
+                  <td>1.344.000.000</td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td>Mechanical Calibration & NDT Inspection</td>
+                  <td>1.0</td>
+                  <td>Paket</td>
+                  <td>580.000.000</td>
+                  <td>580.000.000</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 3: CHECKLIST STK MANDATORY (86 BUTIR) -->
+        <div class="tab-view" id="checklistTab">
+          <div class="checklist-scorecard">
+            <div class="score-item">
+              <div class="score-icon-badge green">✓</div>
+              <div class="score-meta">
+                <span class="score-count" style="color:#059669;">32 Butir (37.2%)</span>
+                <span class="score-sub">Sudah Dicover Sistem</span>
+              </div>
+            </div>
+            <div class="score-item">
+              <div class="score-icon-badge amber">!</div>
+              <div class="score-meta">
+                <span class="score-count" style="color:#D97706;">10 Butir (11.6%)</span>
+                <span class="score-sub">Parsial / Perlu Konfirmasi</span>
+              </div>
+            </div>
+            <div class="score-item">
+              <div class="score-icon-badge gray">○</div>
+              <div class="score-meta">
+                <span class="score-count" style="color:#64748B;">44 Butir (51.2%)</span>
+                <span class="score-sub">Administrasi Hulu / SAP</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="stk-item-row">
+            <div class="stk-left">
+              <span class="stk-tag done">Covered</span>
+              <div>
+                <strong>Item 6: Judul Pekerjaan tanpa 'Gabungan Barang & Jasa'</strong>
+                <div style="font-size:11px; color:#64748B;">TKO B3.2.4-03 Lamp. 3 — Otomatis tervalidasi di cover dan IKPP.</div>
+              </div>
+            </div>
+            <span style="color:#059669; font-weight:700;">OK</span>
+          </div>
+
+          <div class="stk-item-row">
+            <div class="stk-left">
+              <span class="stk-tag done">Covered</span>
+              <div>
+                <strong>Item 10: General Terms & Conditions (GTC) 30 Pasal</strong>
+                <div style="font-size:11px; color:#64748B;">Pedoman A03-001 — Terkompilasi penuh di BAB II naskah tender.</div>
+              </div>
+            </div>
+            <span style="color:#059669; font-weight:700;">OK</span>
+          </div>
+
+          <div class="stk-item-row">
+            <div class="stk-left">
+              <span class="stk-tag done">Covered</span>
+              <div>
+                <strong>Item 15: Komposisi HPS (Prime Cost + Keuntungan & Risiko)</strong>
+                <div style="font-size:11px; color:#64748B;">TKI C3.2.3-01 — Rumus otomatis pembulatan rupiah.</div>
+              </div>
+            </div>
+            <span style="color:#059669; font-weight:700;">OK</span>
+          </div>
+
+          <div class="stk-item-row">
+            <div class="stk-left">
+              <span class="stk-tag partial">Parsial</span>
+              <div>
+                <strong>Item 2: Lingkup kerja bebas dari bias merek tertutup</strong>
+                <div style="font-size:11px; color:#64748B;">Perlu konfirmasi AI guardrail untuk nama brand/vendor spesifik.</div>
+              </div>
+            </div>
+            <span style="color:#D97706; font-weight:700;">Review</span>
+          </div>
+
+          <div class="stk-item-row">
+            <div class="stk-left">
+              <span class="stk-tag pending">Hulu</span>
+              <div>
+                <strong>Item 16: Verifikasi Purchase Requisition (PR) ter-release di SAPP</strong>
+                <div style="font-size:11px; color:#64748B;">Tahap integrasi API SAP Enterprise Pertamina.</div>
+              </div>
+            </div>
+            <span style="color:#64748B; font-weight:700;">Manual</span>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Modular Reactive Scripts -->
+  <script src="js/state.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/canvas.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
