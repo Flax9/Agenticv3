@@ -151,63 +151,6 @@
          ────────────────────────────────────────────────────────────── -->
     <section class="chat-panel" id="chatPanel">
 
-      <!-- ==========================================================
-           4-BOX POPUP MODAL (PILIHAN DOKUMEN SAAT PERTAMA KALI MASUK)
-           ========================================================== -->
-      <div class="chat-popup-overlay" id="chatPopupOverlay">
-        <div class="chat-popup-modal">
-          <div class="popup-modal-header">
-            <div class="popup-header-title">
-              <h3>Pilih Jenis Dokumen Pengadaan</h3>
-              <span>Pedoman PBJ No. A03-001/PNG200000/2024-S9</span>
-            </div>
-            <button class="btn-close-popup" onclick="closeDocPopup()" title="Tutup Pop-up">✕</button>
-          </div>
-          <div class="popup-modal-body">
-            <p class="popup-intro-text">
-              Silakan pilih paket dokumen yang ingin Anda susun. Sistem AI akan memuat alur kerja dan format klausul hukum yang sesuai:
-            </p>
-
-            <!-- 4 Kotak Pilihan Dokumen -->
-            <div class="doc-selection-grid">
-              
-              <!-- Kotak 1: Dokumen Tender -->
-              <div class="doc-choice-card selected" onclick="selectDocumentChoice('tender')" id="choice-tender">
-                <div class="choice-icon-wrap">📄</div>
-                <div class="choice-title">Dokumen Tender Lengkap</div>
-                <div class="choice-desc">Paket resmi IKPP 40 Poin, Lampiran 1A–8, dan Bagian B Kontrak.</div>
-                <span class="choice-tag">Versi 2.0</span>
-              </div>
-
-              <!-- Kotak 2: Dokumen RKS -->
-              <div class="doc-choice-card" onclick="selectDocumentChoice('rks')" id="choice-rks">
-                <div class="choice-icon-wrap">📋</div>
-                <div class="choice-title">Dokumen RKS</div>
-                <div class="choice-desc">Rencana Kerja & Syarat teknis, spesifikasi material, & K3 CSMS.</div>
-                <span class="choice-tag">5 Bab Teknis</span>
-              </div>
-
-              <!-- Kotak 3: Kontrak Definitif -->
-              <div class="doc-choice-card" onclick="selectDocumentChoice('contract')" id="choice-contract">
-                <div class="choice-icon-wrap">📝</div>
-                <div class="choice-title">Kontrak Definitif</div>
-                <div class="choice-desc">Perjanjian pemborongan pekerjaan mandiri 20 pasal definitif siap cetak.</div>
-                <span class="choice-tag">20 Pasal Standar</span>
-              </div>
-
-              <!-- Kotak 4: Draft Amendemen -->
-              <div class="doc-choice-card" onclick="selectDocumentChoice('amendment')" id="choice-amendment">
-                <div class="choice-icon-wrap">📎</div>
-                <div class="choice-title">Draft Amendemen</div>
-                <div class="choice-desc">Addendum perubahan nilai/waktu dengan tabel komparasi lama vs baru.</div>
-                <span class="choice-tag">Legal Drafting</span>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Guided Workflow Stepper Bar (Rendered Dynamically by chat.js) -->
       <div class="workflow-stepper" id="workflowStepper"></div>
 
@@ -446,6 +389,63 @@
     </section>
 
   </main>
+
+  <!-- ==========================================================
+       4-BOX POPUP MODAL (PILIHAN DOKUMEN PENGADAAN - GLOBAL OVERLAY)
+       ========================================================== -->
+  <div class="chat-popup-overlay" id="chatPopupOverlay">
+    <div class="chat-popup-modal">
+      <div class="popup-modal-header">
+        <div class="popup-header-title">
+          <h3>Pilih Jenis Dokumen Pengadaan</h3>
+          <span>Pedoman PBJ No. A03-001/PNG200000/2024-S9</span>
+        </div>
+        <button class="btn-close-popup" onclick="closeDocPopup()" title="Tutup Pop-up">✕</button>
+      </div>
+      <div class="popup-modal-body">
+        <p class="popup-intro-text">
+          Silakan pilih paket dokumen yang ingin Anda susun. Sistem AI akan memuat alur kerja dan format klausul hukum yang sesuai:
+        </p>
+
+        <!-- 4 Kotak Pilihan Dokumen -->
+        <div class="doc-selection-grid">
+          
+          <!-- Kotak 1: Dokumen Tender -->
+          <div class="doc-choice-card selected" onclick="selectDocumentChoice('tender')" id="choice-tender">
+            <div class="choice-icon-wrap">📄</div>
+            <div class="choice-title">Dokumen Tender Lengkap</div>
+            <div class="choice-desc">Paket resmi IKPP 40 Poin, Lampiran 1A–8, dan Bagian B Kontrak.</div>
+            <span class="choice-tag">Versi 2.0</span>
+          </div>
+
+          <!-- Kotak 2: Dokumen RKS -->
+          <div class="doc-choice-card" onclick="selectDocumentChoice('rks')" id="choice-rks">
+            <div class="choice-icon-wrap">📋</div>
+            <div class="choice-title">Dokumen RKS</div>
+            <div class="choice-desc">Rencana Kerja & Syarat teknis, spesifikasi material, & K3 CSMS.</div>
+            <span class="choice-tag">5 Bab Teknis</span>
+          </div>
+
+          <!-- Kotak 3: Kontrak Definitif -->
+          <div class="doc-choice-card" onclick="selectDocumentChoice('contract')" id="choice-contract">
+            <div class="choice-icon-wrap">📝</div>
+            <div class="choice-title">Kontrak Definitif</div>
+            <div class="choice-desc">Perjanjian pemborongan pekerjaan mandiri 20 pasal definitif siap cetak.</div>
+            <span class="choice-tag">20 Pasal Standar</span>
+          </div>
+
+          <!-- Kotak 4: Draft Amendemen -->
+          <div class="doc-choice-card" onclick="selectDocumentChoice('amendment')" id="choice-amendment">
+            <div class="choice-icon-wrap">📎</div>
+            <div class="choice-title">Draft Amendemen</div>
+            <div class="choice-desc">Addendum perubahan nilai/waktu dengan tabel komparasi lama vs baru.</div>
+            <span class="choice-tag">Legal Drafting</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ================================================================
        CLAUDE-STYLE PROGRESS & CONTEXT DRAWER (SLIDE-OUT RIGHT PANEL)

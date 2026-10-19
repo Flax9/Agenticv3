@@ -166,19 +166,19 @@
    3. FOUR-BOX POPUP / MODAL SELECTION (PILIHAN DOKUMEN PENGADAAN)
    ================================================================ */
 .chat-popup-overlay {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 26, 61, 0.55);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 100;
+  background: rgba(0, 26, 61, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -186,9 +186,9 @@
   background: #FFFFFF;
   border: 1.5px solid #CBD5E1;
   border-radius: var(--radius-lg);
-  box-shadow: 0 20px 40px rgba(0, 26, 61, 0.25);
+  box-shadow: 0 24px 48px rgba(0, 26, 61, 0.3);
   width: 100%;
-  max-width: 480px;
+  max-width: 680px;
   overflow: hidden;
   animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -260,18 +260,19 @@
 .doc-selection-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 16px;
 }
 
 .doc-choice-card {
   background: #FFFFFF;
   border: 1.5px solid #E2E8F0;
-  border-radius: var(--radius-md);
-  padding: 14px 12px;
+  border-radius: var(--radius-lg);
+  padding: 16px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  min-height: 145px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   text-align: left;
@@ -279,7 +280,7 @@
 
 .doc-choice-card:hover {
   border-color: var(--pertamina-blue);
-  box-shadow: 0 8px 18px rgba(0, 114, 206, 0.14);
+  box-shadow: 0 10px 22px rgba(0, 114, 206, 0.16);
   transform: translateY(-2px);
   background: #F0F7FF;
 }
@@ -291,29 +292,29 @@
 }
 
 .choice-icon-wrap {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-md);
   background: #EFF6FF;
   color: var(--pertamina-navy);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 20px;
   box-shadow: var(--shadow-sm);
 }
 
 .choice-title {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 800;
   color: var(--pertamina-navy);
   line-height: 1.3;
 }
 
 .choice-desc {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-muted);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .choice-tag {

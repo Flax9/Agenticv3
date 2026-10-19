@@ -439,10 +439,21 @@ body {
 
 .app-workspace.canvas-hidden .chat-panel {
   width: 100% !important;
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: 100% !important;
+  margin: 0 !important;
   border-right: none;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
+  background-color: var(--bg-surface);
+}
+
+.app-workspace.canvas-hidden .workflow-stepper,
+.app-workspace.canvas-hidden .chat-stream,
+.app-workspace.canvas-hidden .quick-chips-wrapper,
+.app-workspace.canvas-hidden .chat-input-container {
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
 
 .btn-restore-canvas {
