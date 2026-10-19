@@ -578,3 +578,290 @@ jobs:
             docker compose run --rm web python manage.py collectstatic --noinput
             docker compose up -d
 ```
+
+---
+
+## 8. Spesifikasi Infrastruktur Kontainerisasi (Docker & Docker Compose)
+
+### 8.1 Arsitektur Multi-Kontainer (6 Layanan Terisolasi)
+
+Seluruh ekosistem Pertamina Procurement Copilot dirancang berjalan di dalam jaringan kontainer Docker yang terisolasi (*isolated bridge network*), memastikan dependensi antar-layanan tidak saling mengganggu:
+
+| Layanan (Service) | Base Image | Port Eksternal | Port Internal | Peran & Tanggung Jawab |
+| :--- | :--- | :--- | :--- | :--- |
+| **`nginx`** | `nginx:1.25-alpine` | `80`, `443` | `80`, `443` | Reverse proxy, static cache (`sendfile`), buffer upload 100MB, timeout AI 300s. |
+| **`web`** | Custom Python 3.11 | - | `8000` | Django 5 Monolith + ASGI runner (`uvicorn`), melayani template & REST API. |
+| **`celery_worker`**| Custom Python 3.11 | - | - | Background worker untuk generasi dokumen Word (`.docx`) & ekstraksi BoQ berat. |
+| **`redis`** | `redis:7-alpine` | - | `6379` | Message broker untuk antrean tugas Celery & caching session. |
+| **`qdrant`** | `qdrant/qdrant:latest`| - | `6333` | Vector Database penyimpanan embeddings 86 Aturan Pedoman Pengadaan STK. |
+| **`db`** | `postgres:16-alpine` | - | `5432` | Pangkalan data relasional (ORM) untuk menyimpan proyek, klausul, dan audit trail. |
+
+---
+
+### 8.2 Spesifikasi `Dockerfile` (Multi-Stage Production Build)
+
+File `Dockerfile` menggunakan teknik *multi-stage build* untuk meminimalkan ukuran image akhir dan meningkatkan keamanan (*non-root user*):
+
+```dockerfile
+# Stage 1: Build & Compile Dependencies
+FROM python:3.11-slim as builder
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+# Stage 2: Final Minimal Runtime Image
+FROM python:3.11-slim
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Buat pengguna non-root demi standar keamanan BUMN
+RUN groupadd -r pertamina && useradd -r -g pertamina pertamina
+
+COPY --from=builder /app/wheels /wheels
+RUN pip install --no-cache /wheels/* && rm -rf /wheels
+
+COPY . .
+RUN chown -R pertamina:pertamina /app
+
+USER pertamina
+EXPOSE 8000
+
+CMD ["uvicorn", "core.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--lifespan", "off"]
+```
+
+---
+
+### 8.3 Blueprint `docker-compose.yml` (Siap Deploy)
+
+```yaml
+version: '3.8'
+
+services:
+  # 1. Pangkalan Data Relasional
+  db:
+    image: postgres:16-alpine
+    container_name: pertamina_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pertamina_db}
+      POSTGRES_USER: ${POSTGRES_USER:-pertamina_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pertamina_pass123}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pertamina_user -d pertamina_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pertamina_internal_net
+
+  # 2. Redis Message Broker & Cache
+  redis:
+    image: redis:7-alpine
+    container_name: pertamina_redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    networks:
+      - pertamina_internal_net
+
+  # 3. Qdrant Vector Database (STK 86 Rules)
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: pertamina_qdrant
+    restart: always
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - pertamina_internal_net
+
+  # 4. Django ASGI Web Application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pertamina_web
+    restart: always
+    command: uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --workers 4
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+    networks:
+      - pertamina_internal_net
+
+  # 5. Celery Asynchronous Worker (AI & Docx Generation)
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pertamina_celery
+    restart: always
+    command: celery -A core worker -l info --concurrency=4
+    volumes:
+      - media_volume:/app/media
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+    networks:
+      - pertamina_internal_net
+
+  # 6. Nginx Edge Gateway & Static Server
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: pertamina_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/app/static:ro
+      - media_volume:/app/media:ro
+    depends_on:
+      - web
+    networks:
+      - pertamina_internal_net
+
+# Persistensi Data Fisik Server (Zero Data Loss)
+volumes:
+  pgdata:
+    driver: local
+  redis_data:
+    driver: local
+  qdrant_storage:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local
+
+networks:
+  pertamina_internal_net:
+    driver: bridge
+```
+
+---
+
+### 8.4 Perintah Operasional Docker (One-Command Startup)
+
+Untuk menjalankan seluruh sistem di server atau komputer pengujian:
+
+1. **Menjalankan Seluruh Ekosistem Kontainer**:
+   ```bash
+   docker compose up -d --build
+   ```
+2. **Menjalankan Migrasi Database di Dalam Kontainer**:
+   ```bash
+   docker compose exec web python manage.py migrate
+   ```
+3. **Mengumpulkan Aset Statis CSS/JS untuk Nginx**:
+   ```bash
+   docker compose exec web python manage.py collectstatic --noinput
+   ```
+4. **Membuat Akun Admin Pertamina**:
+   ```bash
+   docker compose exec web python manage.py createsuperuser
+   ```
+5. **Memeriksa Log Status Seluruh Kontainer**:
+   ```bash
+   docker compose logs -f web celery_worker
+   ```
+
+---
+
+## 9. Tata Kelola Keamanan Data & Pemeliharaan Sistem (Security Governance & Automated Housekeeping)
+
+### 9.1 Manajemen Rahasia & Kebijakan Nol Kebocoran Kredensial (*Secrets Management*)
+
+Untuk memenuhi standar keamanan informasi korporat BUMN dan perbankan, pengelolaan variabel sensitif diatur dengan protokol ketat:
+
+1. **Penegakan Aturan `.gitignore`**:
+   * File `.env` yang berisi *kunci API produksi*, *password database*, dan *Django SECRET_KEY* **dilarang keras** di-commit ke repositori Git.
+   * File `.gitignore` wajib mencantumkan pengecualian:
+     ```text
+     .env
+     .env.local
+     *.log
+     media/
+     output/
+     __pycache__/
+     ```
+2. **Penyediaan Berkas Acuan `.env.example`**:
+   * Pengembang baru hanya diperbolehkan menyalin dari `.env.example` yang berisi variabel dummy tanpa kredensial rahasia:
+     ```env
+     DEBUG=False
+     SECRET_KEY=change-this-in-production-to-a-secure-random-string
+     ALLOWED_HOSTS=127.0.0.1,localhost,copilot.pertamina.com
+     POSTGRES_DB=pertamina_db
+     POSTGRES_USER=pertamina_user
+     POSTGRES_PASSWORD=secure_password_placeholder
+     QDRANT_URL=http://qdrant:6333
+     OPENROUTER_API_KEY=sk-or-v1-placeholder
+     ```
+3. **Injeksi Kredensial CI/CD via GitHub Secrets**:
+   * Seluruh kredensial akses server (`SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`) diinjeksikan secara terenkripsi saat pipeline berjalan tanpa pernah terekspos di log pengujian.
+
+---
+
+### 9.2 Otomasi Pembersihan Berkas Sementara (*Automated Housekeeping Task*)
+
+Aktivitas penyusunan dokumen tender menghasilkan berkas *scratch*, pecahan halaman PDF, dan draf revisi di folder `output/`. Jika dibiarkan, media penyimpanan server akan penuh (*disk saturation*).
+
+1. **Jadwal Pembersihan Berkala via Celery Beat**:
+   * Menjadwalkan tugas otomatis (*cron job*) yang berjalan setiap hari pukul **02.00 WIB**:
+     ```python
+     # apps/rag_engine/tasks.py
+     from celery import shared_task
+     import os, time
+
+     @shared_task
+     def cleanup_expired_temporary_files():
+         """
+         Menghapus berkas sementara di folder output/ yang berusia > 7 hari.
+         Mencegah disk kepenuhan dan menjamin kepatuhan retensi data.
+         """
+         temp_dir = 'output/'
+         retention_seconds = 7 * 24 * 3600  # 7 Hari
+         now = time.time()
+         deleted_count = 0
+
+         if os.path.exists(temp_dir):
+             for filename in os.listdir(temp_dir):
+                 filepath = os.path.join(temp_dir, filename)
+                 if os.path.isfile(filepath):
+                     file_age = now - os.path.getmtime(filepath)
+                     if file_age > retention_seconds:
+                         os.remove(filepath)
+                         deleted_count += 1
+         return f"Housekeeping selesai: {deleted_count} file kedaluwarsa dibersihkan."
+     ```
+2. **Kepatuhan Privasi Data Pengadaan**:
+   * Berkas sementara yang dihapus otomatis memastikan dokumen acuan vendor tidak tertimbun selamanya di disk server tanpa pengawasan.
+
