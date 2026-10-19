@@ -459,21 +459,23 @@ body {
 .btn-restore-canvas {
   display: none;
   position: fixed;
-  bottom: 24px;
-  right: 28px;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
   background: var(--pertamina-navy);
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 10px 18px;
-  border-radius: var(--radius-full);
-  font-size: 13px;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-right: none;
+  padding: 10px 14px 10px 12px;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 45, 98, 0.35);
+  box-shadow: -4px 0 18px rgba(0, 45, 98, 0.25);
   z-index: 99;
   align-items: center;
   gap: 8px;
-  transition: var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .app-workspace.canvas-hidden ~ .btn-restore-canvas,
@@ -483,17 +485,23 @@ body {
 
 .btn-restore-canvas:hover {
   background: var(--pertamina-navy-light);
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(0, 45, 98, 0.45);
+  padding-left: 16px;
+  box-shadow: -6px 0 24px rgba(0, 45, 98, 0.35);
+}
+
+.restore-arrow {
+  font-size: 11px;
+  color: #93C5FD;
 }
 
 .badge-restore {
   background: #10B981;
   color: white;
   font-size: 10px;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: var(--radius-full);
   text-transform: uppercase;
+  font-weight: 800;
 }
 
 /* Utility Helpers */
