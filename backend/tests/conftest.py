@@ -21,6 +21,7 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["DEBUG"] = "false"
 os.environ["COOKIE_SECURE"] = "false"  # TestClient memakai http://
 os.environ["HOUSEKEEPING_ENABLED"] = "false"  # jangan sentuh folder output development
+os.environ["AGENT_WARMUP"] = "false"  # test memakai agent palsu; jangan memuat model sungguhan
 os.environ.setdefault("JWT_SECRET", "test-secret-" + "x" * 40)
 
 from alembic.config import Config
@@ -30,7 +31,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from alembic import command
-from app.core.rate_limit import login_limiter
+from app.core.rate_limit import chat_limiter, login_limiter
 from app.core.security import hash_password
 from app.main import app
 from app.models.enums import Role
@@ -95,6 +96,7 @@ def client(database):
 @pytest.fixture(autouse=True)
 def reset_state(client):
     login_limiter._failures.clear()
+    chat_limiter.reset()
     client.cookies.clear()
 
 

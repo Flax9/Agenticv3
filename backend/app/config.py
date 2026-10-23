@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
     embedding_model: str = "sentence-transformers/all-minilm-l6-v2"
 
+    # Penyimpanan state agent LangGraph: "postgres" (bertahan setelah restart) atau "memory"
+    agent_checkpointer: str = "postgres"
+    # Muat agent saat server start (bukan pada request pertama): menghindari tunggu lama dan kebuntuan setup checkpointer
+    agent_warmup: bool = True
+    # Batas pesan chat per pengguna per menit (melindungi kuota/biaya LLM); 0 = tanpa batas
+    chat_rate_limit_per_minute: int = 20
+
     # Penyimpanan berkas
     output_dir: Path = PROJECT_ROOT / "output"
     max_upload_mb: int = 100

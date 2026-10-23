@@ -17,6 +17,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.core.audit import record_audit
 from app.core.deps import CurrentUser, DraftingUser, SessionDep, client_ip
+from app.core.rate_limit import chat_limiter
 from app.database import SessionLocal
 from app.models import AppUser, ChatMessage, ChatSession, DocumentDraft, TenderProject
 from app.models.enums import ChatRole, ModulTerkait, Role, TipeAksi, TipeDokumen
@@ -44,6 +45,12 @@ AGENT_UNAVAILABLE = (
     "Asisten percakapan untuk **{label}** belum tersedia dari tim AI. Untuk sementara, isi parameter langsung "
     "di kanvas lalu klik **Unduh .docx**."
 )
+LLM_KEY_REJECTED = (
+    "Kunci API layanan LLM (OpenRouter) ditolak atau sudah kedaluwarsa. Hubungi administrator untuk memperbarui "
+    "`OPENROUTER_API_KEY` di server."
+)
+LLM_BUSY = "Layanan LLM sedang sibuk atau kuota habis. Tunggu beberapa saat lalu kirim ulang pesan Anda."
+LLM_UNREACHABLE = "Tidak dapat terhubung ke layanan LLM atau knowledge base. Periksa koneksi server lalu coba lagi."
 BOQ_HINT = (
     "Agent sedang menunggu berkas **BoQ**. Pilih berkas dari drive lewat tombol 📎, atau ketik **lewati** "
     "untuk melanjutkan tanpa BoQ."
@@ -187,6 +194,20 @@ class _PreparedTurn:
     fixed_reply: str | None  # balasan tetap bila agent tidak dijalankan
 
 
+def _agent_error_message(e: Exception) -> str:
+    """Pesan galat agent yang ramah pengguna. Detail teknis hanya masuk log, bukan ke layar."""
+    detail = f"{type(e).__name__} {e}".lower()
+    if any(k in detail for k in ("unauthorized", "api key", "401", "403", "forbidden")):
+        reply = LLM_KEY_REJECTED
+    elif any(k in detail for k in ("rate limit", "ratelimit", "429", "quota", "402", "credit", "overloaded")):
+        reply = LLM_BUSY
+    elif any(k in detail for k in ("connect", "timeout", "timed out", "unreachable", "dns", "ssl")):
+        reply = LLM_UNREACHABLE
+    else:
+        reply = "Copilot gagal memproses pesan ini. Coba kirim ulang; bila terus berulang, hubungi administrator."
+    return f"⚠️ {reply}"
+
+
 async def _prepare_turn(
     session: SessionDep, project: TenderProject, chat: ChatSession, body: MessageCreate, runner: RksAgentRunner
 ) -> _PreparedTurn:
@@ -226,7 +247,7 @@ async def _complete_turn(
             turn = await run_in_threadpool(runner.run_turn, str(chat.id), prep.agent_text, on_event)
         except Exception as e:  # kegagalan LLM/Qdrant dilaporkan ke user sebagai pesan
             logger.exception("Agent gagal pada sesi %s", chat.id)
-            reply = f"⚠️ Maaf, Copilot gagal memproses pesan ini: {e}"
+            reply = _agent_error_message(e)
             new_messages.append(_add_message(session, chat, ChatRole.ASSISTANT, reply, {"error": True}))
         else:
             awaiting, fields = turn.awaiting, turn.fields
@@ -267,6 +288,12 @@ async def _complete_turn(
 
 async def _validated_session(session: SessionDep, session_id: uuid.UUID, user: AppUser, body: MessageCreate):
     chat, project = await _load_session(session, session_id, user, write=True)
+    if wait := chat_limiter.hit(str(user.id)):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Terlalu banyak pesan dalam waktu singkat. Coba lagi dalam {wait} detik.",
+            headers={"Retry-After": str(wait)},
+        )
     if not body.content.strip() and body.dataset_file_id is None:
         raise HTTPException(status_code=422, detail="Pesan tidak boleh kosong.")
     if body.dataset_file_id is not None and project.tipe_dokumen != TipeDokumen.RKS:
@@ -373,7 +400,7 @@ async def stream_message(
                 yield _sse("done", (await task).model_dump(mode="json"))
             except Exception as e:
                 logger.exception("Stream gagal pada sesi %s", chat_id)
-                yield _sse("error", {"detail": f"Gagal memproses pesan: {e}"})
+                yield _sse("error", {"detail": _agent_error_message(e)})
         finally:
             lock.release()
 

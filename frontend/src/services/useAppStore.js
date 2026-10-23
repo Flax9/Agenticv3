@@ -166,6 +166,7 @@ export const useAppStore = create((set, get) => ({
   sendMessage: async (text, { datasetFile = null } = {}) => {
     const trimmed = text.trim()
     if ((!trimmed && !datasetFile) || get().isBusy) return
+    if (get().mode !== 'rks') return // agent percakapan baru tersedia untuk RKS
     const { appendMessage, updateMessage, removeMessage, pushToast } = get()
     const userMsgId = appendMessage({
       sender: 'user',

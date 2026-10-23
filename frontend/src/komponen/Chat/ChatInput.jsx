@@ -17,11 +17,13 @@ export default function ChatInput() {
   const openDatasetPicker = useAppStore((s) => s.openDatasetPicker)
   const textareaRef = useRef(null)
   const purpose = attachPurpose(mode, awaiting)
+  // Hanya RKS yang punya agent percakapan; mode lain bekerja lewat kanvas dan berkas dari drive
+  const chatEnabled = mode === 'rks'
 
   // Satu handler untuk tombol Kirim maupun tombol Enter
   const handleSubmit = (e) => {
     e?.preventDefault()
-    if (!text.trim() || isBusy) return
+    if (!chatEnabled || !text.trim() || isBusy) return
     sendMessage(text)
     setText('')
     textareaRef.current?.focus()
@@ -31,8 +33,9 @@ export default function ChatInput() {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) handleSubmit(e)
   }
 
-  const placeholder =
-    awaiting === 'review_rks'
+  const placeholder = !chatEnabled
+    ? 'Chat belum tersedia untuk jenis dokumen ini. Isi parameter di kanvas atau pilih berkas dari drive (📎).'
+    : awaiting === 'review_rks'
       ? 'Ketik "setuju" untuk ekspor, atau tulis bagian yang perlu direvisi...'
       : awaiting === 'upload_boq'
         ? 'Pilih BoQ dari drive (📎) atau ketik "lewati"...'
@@ -58,16 +61,17 @@ export default function ChatInput() {
           ref={textareaRef}
           rows={1}
           value={text}
+          disabled={!chatEnabled}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           aria-label="Pesan untuk AI Copilot"
-          className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent px-2 py-2 text-[13.5px] text-pertamina-gray-900 outline-none [field-sizing:content]"
+          className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent px-2 py-2 text-[13.5px] text-pertamina-gray-900 outline-none [field-sizing:content] disabled:cursor-not-allowed disabled:text-pertamina-gray-500"
         />
 
         <button
           type="submit"
-          disabled={!text.trim() || isBusy}
+          disabled={!chatEnabled || !text.trim() || isBusy}
           aria-label="Kirim pesan"
           title="Kirim Pesan"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pertamina-navy text-white transition hover:scale-105 hover:bg-pertamina-navy-light disabled:scale-100 disabled:opacity-40"

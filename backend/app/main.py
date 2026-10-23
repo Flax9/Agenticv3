@@ -2,14 +2,18 @@
 
 import asyncio
 import contextlib
+import logging
 import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth_routes, chat_routes, dataset_routes, health_routes, job_routes, kb_routes, tender_routes
 from app.config import settings
+from app.core.jobs import jobs
+from app.services.chat.agent_runner import rks_runner
 from app.services.housekeeping import housekeeping_loop
 
 # Modul AI mencetak log berisi emoji/Unicode lewat print(). Di Windows konsol default-nya cp1252
@@ -19,8 +23,22 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    try:
+        await jobs.fail_interrupted()
+    except Exception:
+        # Mis. migrasi belum dijalankan; /api/health/ready akan melaporkan masalah database yang sebenarnya
+        logger.exception("Gagal menandai job yang terputus")
+    if settings.agent_warmup:
+        # Sebelum menerima request: pemuatan pertama agent lambat dan membuat tabel checkpoint
+        try:
+            await run_in_threadpool(rks_runner.warm)
+        except Exception:
+            logger.exception("Agent gagal dimuat saat startup; chat RKS akan mencoba lagi pada request pertama")
     task = asyncio.create_task(housekeeping_loop()) if settings.housekeeping_enabled else None
     yield
     if task:

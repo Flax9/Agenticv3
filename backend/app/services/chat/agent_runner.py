@@ -51,6 +51,10 @@ class RksAgentRunner:
                     self._graph = graph
         return self._graph
 
+    def warm(self) -> None:
+        """Muat agent sekarang (lihat `agent_warmup` di config)."""
+        _ = self.graph
+
     def is_skip_answer(self, text: str) -> bool:
         """Apakah teks dianggap 'lewati' oleh node upload_boq (kata kunci milik agent)."""
         from app.services.agent.graph import _SKIP_KEYWORDS

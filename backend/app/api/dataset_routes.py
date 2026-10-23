@@ -64,4 +64,4 @@ async def sync(user: KbManagerUser, request: Request):
             )
         return result
 
-    return jobs.start(SYNC_JOB, user.id, work).as_dict()
+    return (await jobs.start(SYNC_JOB, user.id, work)).as_dict()

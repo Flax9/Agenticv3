@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import ChatRole, TipeDokumen
 
@@ -14,6 +14,14 @@ class MessageCreate(BaseModel):
     content: str = Field(default="", max_length=8000)
     # Berkas dari folder dataset yang dilampirkan (mis. BoQ saat agent memintanya)
     dataset_file_id: uuid.UUID | None = None
+
+    @field_validator("content")
+    @classmethod
+    def _no_nul(cls, value: str) -> str:
+        # PostgreSQL menolak karakter NUL pada teks (galat 500 bila lolos sampai INSERT)
+        if "\x00" in value:
+            raise ValueError("Karakter NUL tidak diizinkan.")
+        return value
 
 
 class ChatMessageOut(BaseModel):

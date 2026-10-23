@@ -1,0 +1,32 @@
+# Akses publik lewat Cloudflare Tunnel + Cloudflare Access (laptop sebagai server, tanpa port yang dibuka).
+# Panduan lengkap: deploy/cloudflare/README.md
+#   docker compose -f docker-compose.yml -f compose.tunnel.yml up -d --build
+# Wajib di .env: CLOUDFLARE_TUNNEL_TOKEN
+name: itec
+
+services:
+  web:
+    environment:
+      # Browser mengakses lewat HTTPS (Cloudflare), jadi cookie refresh token wajib Secure
+      COOKIE_SECURE: "true"
+
+  nginx:
+    volumes:
+      # default.conf versi tunnel: IP pengguna asli dari CF-Connecting-IP dan HSTS aktif
+      - ./deploy/nginx/tunnel.conf:/etc/nginx/conf.d/default.conf:ro
+    # Port host tidak perlu dibuka ke jaringan: hanya cloudflared yang mengakses Nginx
+    ports: !override
+      - "127.0.0.1:${HTTP_PORT:-80}:80"
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.0
+    container_name: itec_cloudflared
+    restart: unless-stopped
+    # Token dari dashboard Zero Trust (Networks → Tunnels). Rute hostname → http://nginx:80 diatur di dashboard.
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN wajib diisi di .env}
+    depends_on:
+      nginx:
+        condition: service_started
+    networks: [internal]

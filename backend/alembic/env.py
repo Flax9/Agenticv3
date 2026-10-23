@@ -20,6 +20,11 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+
+def include_object(obj, name, type_, reflected, compare_to):
+    # Tabel checkpoint dibuat dan dikelola LangGraph (PostgresSaver.setup), bukan oleh migrasi
+    return not (type_ == "table" and reflected and name.startswith("checkpoint"))
+
 # URL dari .env, kecuali pemanggil sudah mengisinya (mis. test memakai database terpisah)
 if not config.get_main_option("sqlalchemy.url"):
     config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
@@ -49,6 +54,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -56,7 +62,9 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection, target_metadata=target_metadata, compare_type=True, include_object=include_object
+    )
 
     with context.begin_transaction():
         context.run_migrations()

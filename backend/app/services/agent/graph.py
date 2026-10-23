@@ -712,7 +712,10 @@ def build_graph():
     # Compile with MemorySaver so state persists across turns.
     # interrupt() calls INSIDE upload_boq and review_rks handle pausing —
     # no interrupt_before needed (that would cause a blank double-prompt).
-    checkpointer = MemorySaver()
+    # [Perubahan tim web, 1 baris] checkpointer disimpan di PostgreSQL; lihat app/core/checkpointer.py
+    from app.core.checkpointer import make_checkpointer
+
+    checkpointer = make_checkpointer()
     return builder.compile(checkpointer=checkpointer)
 
 

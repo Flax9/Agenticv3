@@ -126,8 +126,35 @@ Sisi web memakai `agent.py` dari camp apa adanya (hanya import `RAG.` → `app.s
 | 2 | **Revisi tidak dipakai saat generate ulang.** Di `review_rks`, instruksi selain "setuju" mengulang `generate_rks_json`, tetapi prompt-nya hanya memakai `rks_fields` dan `kb_context`, bukan instruksi revisi user. | `review_rks`, `generate_rks_json` | Inti produk berbasis feedback tidak berjalan: draf hasil revisi tidak mengikuti permintaan user. |
 | 3 | Persetujuan dideteksi dari *substring*: `"ya"`, `"ok"`, `"lanjut"`, dst. `"tidak setuju"` mengandung `"setuju"`, dan `"karyawan"` mengandung `"ya"`, sehingga dokumen bisa langsung diekspor. | `route_after_review` | Dokumen terekspor tanpa disetujui. |
 | 4 | `upload_boq` menerima **path berkas lokal** dari teks user, dan pesan interrupt-nya meminta "ketik path lengkap". | `upload_boq` | Teks bebas bisa membuat agent membaca berkas apa pun di server. **Penanganan web:** saat agent menunggu BoQ, web hanya meneruskan kata "lewati/skip" atau path berkas yang dipilih dari folder dataset (sudah divalidasi berada di dalam `DATASET_DIR`). Mohon teks interrupt diganti, misalnya "pilih berkas BoQ dari drive atau ketik 'skip'". Apakah ke depan agent sebaiknya menerima ID berkas, bukan path? |
-| 5 | `MemorySaver` menyimpan state di memori proses. | `build_graph` | Progres agent (field terkumpul, draf yang menunggu review) hilang saat server restart, sedangkan riwayat chat di database tetap ada. Apakah boleh dipindah ke `PostgresSaver` (paket `langgraph-checkpoint-postgres`) memakai database web? |
+| 5 | `MemorySaver` menyimpan state di memori proses. | `build_graph` | Progres agent (field terkumpul, draf yang menunggu review) hilang saat server restart, sedangkan riwayat chat di database tetap ada. Apakah boleh dipindah ke `PostgresSaver` (paket `langgraph-checkpoint-postgres`) memakai database web? **Update 22 Okt 2026:** atas persetujuan pemilik web, satu baris di `build_graph` sudah diganti menjadi `make_checkpointer()` (`app/core/checkpointer.py`, memakai `PostgresSaver`). Logika node tidak berubah; mohon tim AI mengetahui perubahan ini dan memastikan state graph bisa diserialisasi (uji restart lulus di QA). |
 | 6 | Path `.docx` hasil ekspor hanya tersedia di teks pesan (`` `path` ``), dan `rks_draft_json` dikosongkan setelah ekspor. | `export_docx` | Web mem-parsing path dari teks (rapuh, sama seperti C5). Usulan: simpan path di state, misalnya `docx_path`. |
 | 7 | Model `qwen/qwen3.7-flash` ditulis langsung di kode (sama dengan C3), dan log memakai `print()` berisi emoji. | modul agent | Di Windows `print()` dengan emoji menggagalkan request (UnicodeEncodeError). Web sudah memaksa stdout UTF-8 di `main.py`. Usulan: memakai `logging`. |
 | 8 | `retrieve_kb` dan `retrieve_examples` selalu memakai collection default `rks_kb`. | `agent.py` | Untuk Kontrak/Amendemen nanti, collection mana yang dipakai? |
 | 9 | Streaming token (Fase 4): node `route_question` dan `clarify_rks` memakai *structured output*, sehingga token JSON-nya ikut ter-stream. | `agent.py` | **[Asumsi web]** web hanya meneruskan token dari node `direct_answer` dan `kb_answer`; node lain dikirim sebagai event progres. Mohon konfirmasi node mana yang aman di-stream. |
+
+---
+
+## G. Agent chat untuk Tender, Kontrak, dan Amendemen: apa yang sudah siap di web
+
+Terakhir diperbarui: 23 Oktober 2026. Saat ini sesi non-RKS dijawab pesan tetap ("asisten belum tersedia") dan kolom ketik di UI dinonaktifkan. Bagian ini mencatat titik sambung yang **sudah ada di web** supaya agent baru tinggal dihubungkan.
+
+**Titik sambung di web (sudah berjalan untuk RKS):**
+
+| Hal | Keadaan sekarang |
+|---|---|
+| Penghubung | `backend/app/services/chat/agent_runner.py` (`RksAgentRunner`): satu sesi = satu `thread_id`, `interrupt()` dilanjutkan dengan `Command(resume=...)`, token dan progres node dikirim lewat SSE. |
+| Pemilihan agent | `chat_routes.py` (`_prepare_turn`): `tipe_dokumen != RKS` langsung dijawab pesan tetap. Perlu pemetaan `tipe_dokumen` → runner bila agent baru ada. |
+| Hasil yang dibaca web | `awaiting` (nama node interrupt), `fields` (field terkumpul), `new_draft` (JSON draf), dan path `.docx` di teks ekspor. Draf disimpan sebagai versi di tabel draf. |
+| Lampiran | `dataset_file_id` dari folder drive diubah web menjadi path berkas lokal, hanya untuk RKS. |
+| Checkpointer | PostgreSQL (`AGENT_CHECKPOINTER=postgres`), jadi sesi bisa dilanjutkan setelah restart. |
+
+**Yang perlu diputuskan/disediakan tim AI per jenis dokumen (Tender, Kontrak, Amendemen):**
+
+1. Apakah dibuat satu graph per jenis dokumen, atau satu graph dengan parameter jenis dokumen? Nama fungsi pembuatnya apa?
+2. Field apa saja yang dikumpulkan agent (padanan `rks_fields`) dan field mana yang wajib. Untuk Tender, apakah ekstraksi BoQ/RKS yang sekarang di `/api/extract-tender-metadata` dipanggil sebagai node?
+3. Bentuk draf yang dihasilkan: JSON seperti `rks_draft_json`, atau langsung parameter untuk generator yang ada (`/api/generate-tender|kontrak|amendemen`)? Web sudah menyimpan hasil generator itu sebagai versi draf per paket.
+4. Node mana yang memakai `interrupt()` dan nama node-nya, supaya UI menampilkan petunjuk dan tombol yang tepat (seperti `upload_boq` dan `review_rks`).
+5. Node mana yang aman di-stream tokennya (lihat F#9), dan collection Qdrant mana yang dipakai (`contract_kb`, `amendment_kb`; lihat F#8). Catatan: kedua collection itu saat ini **kosong** di Qdrant (cek 23 Okt 2026), jadi RAG kontrak/amendemen belum punya bahan.
+6. Penanganan galat: web sekarang menerjemahkan galat LLM (kunci ditolak, kuota/rate limit, koneksi) menjadi pesan ramah. Agent cukup membiarkan exception naik, tidak perlu menangkapnya sendiri.
+
+**Temuan operasional 23 Okt 2026 (bukan bug AI):** uji chat RKS langsung gagal karena `OPENROUTER_API_KEY` ditolak OpenRouter ("API key expired"). Perlu kunci baru dari pemilik akun OpenRouter.

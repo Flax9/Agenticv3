@@ -155,7 +155,7 @@ def test_agent_error_is_saved_as_message(client, runner):
     runner.fail = True
     turn = _send(client, fpp, sid, "Buatkan RKS")
     assert turn["messages"][-1]["artifacts_payload"] == {"error": True}
-    assert "LLM timeout" in turn["messages"][-1]["content"]
+    assert "Tidak dapat terhubung" in turn["messages"][-1]["content"]  # pesan ramah, bukan galat mentah
 
 
 def test_non_rks_session_explains_agent_not_available(client, runner):

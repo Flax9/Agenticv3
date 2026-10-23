@@ -33,3 +33,7 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Hasil run QA (dibuat ulang tiap run)
+qa/hasil/
+qa_run*.log
