@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.api import kb_routes
 from app.api.tender_routes import _safe_name
 from app.models.enums import Role
 from tests.conftest import login
@@ -53,6 +54,25 @@ def test_extract_rejects_empty_file(client, admin):
 def test_kb_list_rejects_unknown_collection(client, admin):
     res = client.get("/api/kb/list", params={"collection": "tidak_ada"}, headers=admin)
     assert res.status_code == 400
+
+
+def test_kb_list_documents_is_filename_to_chunk_count(client, admin, monkeypatch):
+    """Kontrak dengan frontend (KnowledgeBaseView): `documents` berupa dict nama berkas → jumlah chunk."""
+
+    class FakeStore:
+        def __init__(self, collection_name):
+            pass
+
+        def list_sources(self):
+            return {"RKS_Perpipaan.pdf": 42, "BOQ_2025.pdf": 18}
+
+    monkeypatch.setattr(kb_routes, "Vector_Store", FakeStore)
+    res = client.get("/api/kb/list", params={"collection": "rks_kb"}, headers=admin)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["collection"] == "rks_kb"
+    assert body["documents"] == {"RKS_Perpipaan.pdf": 42, "BOQ_2025.pdf": 18}
+    assert body["total"] == 2
 
 
 def test_amendemen_rejects_invalid_json(client, admin):
